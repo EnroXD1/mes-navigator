@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#071019"/>
+  <rect x="58" y="58" width="396" height="396" rx="86" fill="#101e2b" stroke="#65dbe5" stroke-width="8"/>
+  <path d="M126 166h260M126 256h260M126 346h260" stroke="#243746" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="159" cy="166" r="18" fill="#c8f26b"/>
+  <circle cx="353" cy="256" r="18" fill="#65dbe5"/>
+  <circle cx="236" cy="346" r="18" fill="#ffb45c"/>
+  <text x="256" y="292" fill="#edf5f7" font-family="Arial, sans-serif" font-size="128" font-weight="800" text-anchor="middle">ЦЗ</text>
+</svg>

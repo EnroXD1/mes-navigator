@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Интерактивный тренажёр по MES, MOM и промышленным информационным системам"
+    />
+    <title>Цех знаний — тренажёр MES/MOM</title>
+    <meta name="theme-color" content="#071019" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <button class="brand" data-view="overview" aria-label="Открыть обзор">
+          <span class="brand-mark" aria-hidden="true">ЦЗ</span>
+          <span>
+            <strong>Цех знаний</strong>
+            <small>MES / MOM navigator</small>
+          </span>
+        </button>
+
+        <nav class="primary-nav" aria-label="Разделы приложения">
+          <button class="nav-button active" data-view="overview">Обзор</button>
+          <button class="nav-button" data-view="topics">100 тем</button>
+          <button class="nav-button" data-view="simulator">Симулятор</button>
+          <button class="nav-button" data-view="quiz">Экзамен</button>
+        </nav>
+
+        <div class="header-progress" aria-label="Общий прогресс">
+          <span><b id="header-progress-value">0%</b> изучено</span>
+          <div class="progress-track"><i id="header-progress-bar"></i></div>
+        </div>
+      </header>
+
+      <main>
+        <section class="view active" id="overview-view">
+          <div class="overview-grid">
+            <article class="welcome-panel panel">
+              <p class="eyebrow">Персональный маршрут · Прикладная информатика</p>
+              <h1>Разбери цифровой завод<br />по слоям</h1>
+              <p class="lead">
+                Изучай термины в контексте, проверяй себя и проводи учебный
+                производственный заказ от плана до выпуска.
+              </p>
+              <div class="welcome-actions">
+                <button class="button primary" id="continue-button">Продолжить обучение</button>
+                <button class="button secondary" data-view="simulator">Открыть симулятор</button>
+                <button class="button secondary" id="install-app">Установить на телефон</button>
+              </div>
+              <dl class="quick-stats">
+                <div><dt id="studied-count">0</dt><dd>тем изучено</dd></div>
+                <div><dt id="module-count">9</dt><dd>модулей</dd></div>
+                <div><dt id="quiz-best">—</dt><dd>лучший экзамен</dd></div>
+              </dl>
+            </article>
+
+            <article class="contour-panel panel" aria-labelledby="contour-title">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Карта контекста</p>
+                  <h2 id="contour-title">Цифровой контур</h2>
+                </div>
+                <span class="live-badge"><i></i> Учебная модель</span>
+              </div>
+              <div class="system-map" aria-label="Связи корпоративных систем">
+                <button class="system-node top" data-topic="2"><b>ERP</b><span>планы и ресурсы</span></button>
+                <button class="system-node left" data-topic="3"><b>PLM</b><span>изделие</span></button>
+                <button class="system-node center" data-topic="1"><b>MES / MOM</b><span>исполнение</span></button>
+                <button class="system-node right" data-topic="7"><b>APS</b><span>расписание</span></button>
+                <button class="system-node bottom-left" data-topic="13"><b>Склад</b><span>материалы</span></button>
+                <button class="system-node bottom-right" data-topic="12"><b>QMS</b><span>качество</span></button>
+                <svg class="map-lines" viewBox="0 0 600 360" aria-hidden="true">
+                  <path d="M300 71V142 M166 178L246 190 M434 178L354 190 M181 295L255 236 M419 295L345 236" />
+                  <circle cx="300" cy="107" r="4" /><circle cx="205" cy="184" r="4" />
+                  <circle cx="395" cy="184" r="4" /><circle cx="220" cy="264" r="4" />
+                  <circle cx="380" cy="264" r="4" />
+                </svg>
+              </div>
+            </article>
+          </div>
+
+          <section class="learning-path" aria-labelledby="path-title">
+            <div class="section-heading">
+              <div><p class="eyebrow">30 недель · 5–6 часов в неделю</p><h2 id="path-title">Учебный маршрут</h2></div>
+              <button class="text-button" data-view="topics">Показать все темы →</button>
+            </div>
+            <div class="module-grid" id="module-grid"></div>
+          </section>
+        </section>
+
+        <section class="view" id="topics-view">
+          <div class="workspace-header">
+            <div><p class="eyebrow">Справочник и конспект</p><h1>100 тем</h1></div>
+            <label class="search-field">
+              <span aria-hidden="true">⌕</span>
+              <input id="topic-search" type="search" placeholder="Найти термин или тему" />
+            </label>
+          </div>
+          <div class="topic-workspace">
+            <aside class="module-filter" aria-label="Фильтр по модулям">
+              <button class="filter-button active" data-module="all"><span>Все темы</span><b>100</b></button>
+              <div id="module-filter-list"></div>
+            </aside>
+            <div class="topic-list-area">
+              <div class="topic-toolbar">
+                <p id="topic-result-count">100 тем</p>
+                <label class="checkbox-label"><input id="unfinished-only" type="checkbox" /> Только неизученные</label>
+              </div>
+              <div class="topic-list" id="topic-list"></div>
+              <div class="empty-state" id="topic-empty" hidden>
+                <strong>Ничего не найдено</strong>
+                <span>Попробуй изменить запрос или фильтр.</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="simulator-view">
+          <div class="workspace-header compact">
+            <div>
+              <p class="eyebrow">Практическая модель</p>
+              <h1>Заказ МО-2407 · Электродвигатель ЭД-100</h1>
+            </div>
+            <button class="button secondary" id="reset-simulator">Сбросить сценарий</button>
+          </div>
+
+          <div class="simulator-layout">
+            <div class="sim-main">
+              <article class="panel order-panel">
+                <div class="order-head">
+                  <div><span class="status-pill" id="order-status">Запланирован</span><h2>Производственный заказ</h2></div>
+                  <div class="order-qty"><span>Количество</span><b>1 шт.</b></div>
+                </div>
+                <div class="stage-track" id="stage-track"></div>
+                <div class="simulation-explainer" id="simulation-explainer"></div>
+                <div class="simulation-actions" id="simulation-actions"></div>
+              </article>
+
+              <div class="sim-two-columns">
+                <article class="panel">
+                  <div class="panel-heading"><div><p class="eyebrow">MBOM</p><h2>Комплектование</h2></div><button class="icon-button" data-topic="4" aria-label="Открыть тему BOM">?</button></div>
+                  <div id="bom-list" class="data-list"></div>
+                </article>
+                <article class="panel">
+                  <div class="panel-heading"><div><p class="eyebrow">Маршрут</p><h2>Операции</h2></div><button class="icon-button" data-topic="6" aria-label="Открыть тему маршрутов">?</button></div>
+                  <div id="route-list" class="data-list"></div>
+                </article>
+              </div>
+            </div>
+
+            <aside class="sim-side">
+              <article class="panel term-radar">
+                <p class="eyebrow">Термины в действии</p>
+                <h2 id="active-term-title">Производственный заказ</h2>
+                <p id="active-term-copy">Задание на выпуск определённого количества продукции в заданные сроки.</p>
+                <button class="text-button" id="active-term-link">Открыть тему →</button>
+              </article>
+              <article class="panel trace-panel">
+                <div class="panel-heading"><div><p class="eyebrow">Прослеживаемость</p><h2>Журнал событий</h2></div><button class="icon-button" data-topic="11" aria-label="Открыть тему прослеживаемости">?</button></div>
+                <ol class="trace-log" id="trace-log"></ol>
+              </article>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="quiz-view">
+          <div class="quiz-shell">
+            <div class="quiz-intro" id="quiz-intro">
+              <p class="eyebrow">Быстрая проверка</p>
+              <h1>Экзамен по терминам</h1>
+              <p>10 случайных вопросов по всему курсу. Для зачёта нужно дать минимум 8 правильных ответов.</p>
+              <button class="button primary" id="start-quiz">Начать экзамен</button>
+            </div>
+            <div class="quiz-card panel" id="quiz-card" hidden>
+              <div class="quiz-meta"><span id="quiz-counter">Вопрос 1 из 10</span><b id="quiz-score">0 баллов</b></div>
+              <div class="progress-track"><i id="quiz-progress"></i></div>
+              <p class="quiz-prompt">Какое определение лучше подходит к термину:</p>
+              <h2 id="quiz-term"></h2>
+              <div class="answer-list" id="answer-list"></div>
+              <div class="quiz-feedback" id="quiz-feedback" hidden></div>
+              <button class="button primary" id="next-question" hidden>Следующий вопрос</button>
+            </div>
+            <div class="quiz-result panel" id="quiz-result" hidden></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="topic-dialog" id="topic-dialog">
+      <div class="dialog-head">
+        <div><span id="dialog-module" class="topic-module-label"></span><h2 id="dialog-title"></h2></div>
+        <button class="dialog-close" id="dialog-close" aria-label="Закрыть">×</button>
+      </div>
+      <div class="dialog-content">
+        <section><h3>Коротко</h3><p id="dialog-definition"></p></section>
+        <section><h3>Зачем это знать</h3><p id="dialog-context"></p></section>
+        <section class="self-check"><span>Проверь себя</span><p id="dialog-question"></p></section>
+        <label class="notes-field">Моя заметка<textarea id="dialog-note" rows="4" placeholder="Запиши объяснение своими словами…"></textarea></label>
+      </div>
+      <div class="dialog-actions">
+        <button class="button secondary" id="save-note">Сохранить заметку</button>
+        <button class="button primary" id="toggle-studied">Отметить изученной</button>
+      </div>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>

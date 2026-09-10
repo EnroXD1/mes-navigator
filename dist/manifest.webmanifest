@@ -1,0 +1,25 @@
+{
+  "name": "Цех знаний — MES/MOM тренажёр",
+  "short_name": "Цех знаний",
+  "description": "100 тем, экзамены и симулятор цифрового производства",
+  "lang": "ru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#071019",
+  "theme_color": "#071019",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "100 тем", "url": "./#topics" },
+    { "name": "Симулятор", "url": "./#simulator" },
+    { "name": "Экзамен", "url": "./#quiz" }
+  ]
+}
