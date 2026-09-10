@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Интерактивный тренажёр по MES, MOM и промышленным информационным системам"
+      content="Интерактивный тренажёр по MES, MOM и промышленным системам со словарём аббревиатур"
     />
     <title>Цех знаний — тренажёр MES/MOM</title>
     <meta name="theme-color" content="#071019" />
@@ -20,13 +20,14 @@
           <span class="brand-mark" aria-hidden="true">ЦЗ</span>
           <span>
             <strong>Цех знаний</strong>
-            <small>MES / MOM navigator · v0.3.0</small>
+            <small>MES / MOM navigator · v0.4.0</small>
           </span>
         </button>
 
         <nav class="primary-nav" aria-label="Разделы приложения">
           <button class="nav-button active" data-view="overview">Учиться</button>
           <button class="nav-button" data-view="topics">100 тем</button>
+          <button class="nav-button" data-view="glossary">Словарь</button>
           <button class="nav-button" data-view="simulator">Симулятор</button>
           <button class="nav-button" data-view="quiz">Экзамен</button>
         </nav>
@@ -129,6 +130,29 @@
           </div>
         </section>
 
+        <section class="view" id="glossary-view">
+          <div class="workspace-header glossary-header">
+            <div>
+              <p class="eyebrow">Расшифровка без лишней теории</p>
+              <h1>Словарь аббревиатур</h1>
+              <p class="workspace-intro">Полная форма, назначение, место в цифровом контуре и простой пример для завода.</p>
+            </div>
+            <label class="search-field">
+              <span aria-hidden="true">⌕</span>
+              <input id="glossary-search" type="search" placeholder="Например: MES, склад, безопасность" />
+            </label>
+          </div>
+          <div class="glossary-toolbar">
+            <p id="glossary-count"></p>
+            <span>Нажми на карточку, чтобы увидеть роль в системе и связанные темы.</span>
+          </div>
+          <div class="glossary-grid" id="glossary-grid"></div>
+          <div class="empty-state" id="glossary-empty" hidden>
+            <strong>Такой аббревиатуры пока нет</strong>
+            <span>Попробуй полную форму, русский смысл или назначение.</span>
+          </div>
+        </section>
+
         <section class="view" id="simulator-view">
           <div class="workspace-header compact">
             <div>
@@ -210,6 +234,7 @@
         <section class="detail-section"><h3>Как это устроено</h3><ul id="dialog-points" class="detail-points"></ul></section>
         <section class="example-section"><h3>Пример на производстве</h3><p id="dialog-example"></p></section>
         <section class="distinction-section"><h3>Что важно не перепутать</h3><p id="dialog-distinction"></p></section>
+        <section id="dialog-abbreviations-section" hidden><h3>Аббревиатуры в этой теме</h3><div id="dialog-abbreviations" class="topic-abbreviations"></div></section>
         <section><h3>Связанные темы</h3><div id="dialog-related" class="related-topics"></div></section>
         <section id="dialog-source-section" hidden><h3>Официальный материал</h3><a id="dialog-source" class="source-link" target="_blank" rel="noopener noreferrer"></a></section>
         <section class="self-check"><span>Проверь себя</span><p id="dialog-question"></p></section>
@@ -218,6 +243,20 @@
       <div class="dialog-actions">
         <button class="button secondary" id="save-note">Сохранить заметку</button>
         <button class="button primary" id="start-topic-lesson">Начать урок</button>
+      </div>
+    </dialog>
+
+    <dialog class="topic-dialog abbreviation-dialog" id="abbreviation-dialog">
+      <div class="dialog-head">
+        <div><span id="abbreviation-category" class="topic-module-label"></span><h2 id="abbreviation-code"></h2></div>
+        <button class="dialog-close" id="abbreviation-close" aria-label="Закрыть расшифровку">×</button>
+      </div>
+      <div class="dialog-content abbreviation-detail">
+        <section class="abbreviation-expansion"><span>Полная форма</span><strong id="abbreviation-full"></strong><p id="abbreviation-meaning"></p></section>
+        <section><h3>Что делает</h3><p id="abbreviation-purpose"></p></section>
+        <section class="distinction-section"><h3>Место в общей системе</h3><p id="abbreviation-role"></p></section>
+        <section class="example-section"><h3>Простой пример</h3><p id="abbreviation-example"></p></section>
+        <section><h3>Где изучается</h3><div id="abbreviation-topics" class="related-topics"></div></section>
       </div>
     </dialog>
 
@@ -260,6 +299,7 @@
 
     <script src="topic-details.js"></script>
     <script src="topic-diagrams.js"></script>
+    <script src="abbreviations.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -126,6 +126,7 @@ const moduleFor = (id) => {
 };
 const topicDetails = window.TOPIC_DETAILS || {};
 const topicDiagrams = window.TOPIC_DIAGRAMS || {};
+const abbreviations = window.ABBREVIATIONS || [];
 const topics = rawTopics.map(([id, title, definition]) => ({
   id,
   title,
@@ -250,7 +251,8 @@ function renderTopics() {
   const unfinishedOnly = $("#unfinished-only").checked;
   const visible = topics.filter((topic) => {
     const matchesModule = selectedModule === "all" || topic.module === selectedModule;
-    const detailText = `${topic.details.points.join(" ")} ${topic.details.example} ${topic.details.distinction}`;
+    const abbreviationText = abbreviationsForTopic(topic.id).map((item) => `${item.code} ${item.full} ${item.meaning}`).join(" ");
+    const detailText = `${topic.details.points.join(" ")} ${topic.details.example} ${topic.details.distinction} ${abbreviationText}`;
     const matchesQuery = !query || `${topic.title} ${topic.definition} ${detailText}`.toLowerCase().includes(query);
     const matchesProgress = !unfinishedOnly || !state.studied.includes(topic.id);
     return matchesModule && matchesQuery && matchesProgress;
@@ -278,6 +280,62 @@ function wordForTopics(number) {
   return "тем";
 }
 
+function abbreviationsForTopic(topicId) {
+  return abbreviations.filter((item) => item.topics.includes(Number(topicId)));
+}
+
+function abbreviationCountLabel(number) {
+  const mod100 = number % 100;
+  const mod10 = number % 10;
+  if (mod100 >= 11 && mod100 <= 14) return `${number} сокращений`;
+  if (mod10 === 1) return `${number} сокращение`;
+  if (mod10 >= 2 && mod10 <= 4) return `${number} сокращения`;
+  return `${number} сокращений`;
+}
+
+function abbreviationButton(item, compact = false) {
+  if (compact) {
+    return `<button class="topic-abbreviation" type="button" data-abbreviation="${item.code}">
+      <b>${item.code}</b><span>${item.meaning}</span>
+    </button>`;
+  }
+  return `<button class="glossary-card" type="button" data-abbreviation="${item.code}" aria-label="Открыть расшифровку ${item.code}">
+    <span class="glossary-card-head"><b>${item.code}</b><em>${item.category}</em></span>
+    <span class="glossary-full">${item.full}</span>
+    <strong>${item.meaning}</strong>
+    <span class="glossary-purpose">${item.purpose}</span>
+    <span class="glossary-example"><small>Пример</small>${item.example}</span>
+  </button>`;
+}
+
+function renderGlossary() {
+  const query = $("#glossary-search").value.trim().toLowerCase();
+  const visible = abbreviations.filter((item) => {
+    const searchable = `${item.code} ${item.full} ${item.meaning} ${item.category} ${item.purpose} ${item.role} ${item.example}`.toLowerCase();
+    return !query || searchable.includes(query);
+  });
+  $("#glossary-count").textContent = `${abbreviationCountLabel(visible.length)} из ${abbreviations.length}`;
+  $("#glossary-empty").hidden = visible.length !== 0;
+  $("#glossary-grid").innerHTML = visible.map((item) => abbreviationButton(item)).join("");
+}
+
+function openAbbreviation(code) {
+  const item = abbreviations.find((entry) => entry.code === code);
+  if (!item) return;
+  $("#abbreviation-category").textContent = item.category;
+  $("#abbreviation-code").textContent = item.code;
+  $("#abbreviation-full").textContent = item.full;
+  $("#abbreviation-meaning").textContent = item.meaning;
+  $("#abbreviation-purpose").textContent = item.purpose;
+  $("#abbreviation-role").textContent = item.role;
+  $("#abbreviation-example").textContent = item.example;
+  $("#abbreviation-topics").innerHTML = item.topics.slice(0, 10).map((topicId) => {
+    const topic = topicById(topicId);
+    return topic ? `<button type="button" data-topic="${topic.id}">№${topic.id} · ${topic.title}</button>` : "";
+  }).join("");
+  if (!$("#abbreviation-dialog").open) $("#abbreviation-dialog").showModal();
+}
+
 function openTopic(id) {
   const topic = topicById(id);
   if (!topic) return;
@@ -289,6 +347,9 @@ function openTopic(id) {
   $("#dialog-points").innerHTML = topic.details.points.map((point) => `<li>${point}</li>`).join("");
   $("#dialog-example").textContent = topic.details.example;
   $("#dialog-distinction").textContent = topic.details.distinction;
+  const topicAbbreviations = abbreviationsForTopic(topic.id);
+  $("#dialog-abbreviations-section").hidden = topicAbbreviations.length === 0;
+  $("#dialog-abbreviations").innerHTML = topicAbbreviations.map((item) => abbreviationButton(item, true)).join("");
   $("#dialog-related").innerHTML = topic.details.related.map((relatedId) => {
     const related = topicById(relatedId);
     return related ? `<button type="button" data-topic="${related.id}">№${related.id} · ${related.title}</button>` : "";
@@ -364,11 +425,13 @@ function renderLesson() {
   controls.innerHTML = "";
 
   if (lesson.step === 0) {
+    const lessonAbbreviations = abbreviationsForTopic(topic.id).slice(0, 4);
     body.innerHTML = `<div class="lesson-copy">
       <p class="eyebrow">Разберись в сути</p>
       <h2>${topic.title}</h2>
       <p class="lesson-definition">${topic.definition}</p>
       <div class="memory-hook"><span>Опорная связь</span><strong>${topic.diagram.join(" → ")}</strong></div>
+      ${lessonAbbreviations.length ? `<div class="lesson-abbreviations"><span>Аббревиатуры урока</span><div>${lessonAbbreviations.map((item) => abbreviationButton(item, true)).join("")}</div></div>` : ""}
       <ul class="lesson-key-points">${topic.details.points.slice(0, 2).map((point) => `<li>${point}</li>`).join("")}</ul>
     </div>`;
     controls.innerHTML = `<button class="button primary" id="lesson-next">Показать схему</button>`;
@@ -628,6 +691,7 @@ function renderAll() {
   renderModules();
   renderSequentialPath();
   renderTopics();
+  renderGlossary();
 }
 
 document.addEventListener("click", (event) => {
@@ -635,7 +699,13 @@ document.addEventListener("click", (event) => {
   if (viewButton) showView(viewButton.dataset.view);
 
   const topicButton = event.target.closest("[data-topic]");
-  if (topicButton) openTopic(topicButton.dataset.topic);
+  if (topicButton) {
+    if ($("#abbreviation-dialog").open) $("#abbreviation-dialog").close();
+    openTopic(topicButton.dataset.topic);
+  }
+
+  const abbreviationButton = event.target.closest("[data-abbreviation]");
+  if (abbreviationButton) openAbbreviation(abbreviationButton.dataset.abbreviation);
 
   const moduleButton = event.target.closest("[data-open-module]");
   if (moduleButton) {
@@ -669,8 +739,10 @@ document.addEventListener("click", (event) => {
 });
 
 $("#topic-search").addEventListener("input", renderTopics);
+$("#glossary-search").addEventListener("input", renderGlossary);
 $("#unfinished-only").addEventListener("change", renderTopics);
 $("#dialog-close").addEventListener("click", () => $("#topic-dialog").close());
+$("#abbreviation-close").addEventListener("click", () => $("#abbreviation-dialog").close());
 $("#save-note").addEventListener("click", () => {
   state.notes[activeTopicId] = $("#dialog-note").value.trim();
   saveState();
@@ -781,6 +853,21 @@ function registerWebMcpTools() {
       execute: ({ topicId }) => { showView("topics"); openTopic(topicId); return { topicId, title: topicById(topicId)?.title }; }
     },
     {
+      name: "search_abbreviations",
+      title: "Найти расшифровку аббревиатуры",
+      description: "Ищет сокращения по коду, полной форме, русскому смыслу или назначению и возвращает простые объяснения.",
+      inputSchema: { type: "object", properties: { query: { type: "string", minLength: 1, maxLength: 80 } }, required: ["query"], additionalProperties: false },
+      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      execute: ({ query }) => {
+        const normalized = query.trim().toLowerCase();
+        const results = abbreviations.filter((item) => `${item.code} ${item.full} ${item.meaning} ${item.purpose}`.toLowerCase().includes(normalized)).slice(0, 10);
+        showView("glossary");
+        $("#glossary-search").value = query;
+        renderGlossary();
+        return results.map(({ code, full, meaning, purpose, example }) => ({ code, full, meaning, purpose, example }));
+      }
+    },
+    {
       name: "advance_production_simulation",
       title: "Продвинуть производственный заказ",
       description: "Выполняет следующий безопасный шаг учебного производственного заказа до этапа контроля качества.",
@@ -796,4 +883,4 @@ renderAll();
 renderSimulator();
 registerWebMcpTools();
 const initialView = location.hash.slice(1);
-showView(["overview", "topics", "simulator", "quiz"].includes(initialView) ? initialView : "overview", false);
+showView(["overview", "topics", "glossary", "simulator", "quiz"].includes(initialView) ? initialView : "overview", false);
