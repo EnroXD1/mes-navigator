@@ -125,12 +125,14 @@ const moduleFor = (id) => {
   return "platforms";
 };
 const topicDetails = window.TOPIC_DETAILS || {};
+const topicDiagrams = window.TOPIC_DIAGRAMS || {};
 const topics = rawTopics.map(([id, title, definition]) => ({
   id,
   title,
   definition,
   module: moduleFor(id),
-  details: topicDetails[id] || { points: [], example: "", distinction: "", related: [], source: null }
+  details: topicDetails[id] || { points: [], example: "", distinction: "", related: [], source: null },
+  diagram: topicDiagrams[id] || ["Исходные данные", title, "Практический результат"]
 }));
 const moduleMap = Object.fromEntries(modules.map((module) => [module.id, module]));
 
@@ -138,6 +140,9 @@ const defaultState = {
   studied: [],
   notes: {},
   quizBest: null,
+  xp: 0,
+  streak: 0,
+  lastStudyDate: null,
   simulator: { index: 0, defect: false, log: ["Заказ МО-2407 создан в ERP и передан в MES"] }
 };
 
@@ -154,11 +159,30 @@ let state = loadState();
 let selectedModule = "all";
 let activeTopicId = 1;
 let quiz = null;
+let lesson = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const saveState = () => localStorage.setItem("ceh-znaniy-state", JSON.stringify(state));
 const topicById = (id) => topics.find((topic) => topic.id === Number(id));
+const nextTopic = () => topics.find((topic) => !state.studied.includes(topic.id)) || null;
+const isTopicUnlocked = (topic) => state.studied.includes(topic.id) || topic.id === nextTopic()?.id;
+
+function localDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function updateStreak() {
+  const today = localDateKey();
+  if (state.lastStudyDate === today) return;
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  state.streak = state.lastStudyDate === localDateKey(yesterday) ? (state.streak || 0) + 1 : 1;
+  state.lastStudyDate = today;
+}
 
 function showView(name, updateHash = true) {
   $$(".view").forEach((view) => view.classList.toggle("active", view.id === `${name}-view`));
@@ -170,10 +194,17 @@ function showView(name, updateHash = true) {
 function renderProgress() {
   const count = state.studied.length;
   const percent = Math.round((count / topics.length) * 100);
+  const current = nextTopic();
   $("#header-progress-value").textContent = `${percent}%`;
   $("#header-progress-bar").style.width = `${percent}%`;
   $("#studied-count").textContent = count;
+  $("#xp-count").textContent = state.xp || 0;
+  $("#streak-count").textContent = state.streak || 0;
   $("#quiz-best").textContent = state.quizBest === null ? "—" : `${state.quizBest}/10`;
+  $("#next-topic-kicker").textContent = current ? `Следующий урок · тема ${current.id} из ${topics.length}` : "Маршрут завершён · 100 из 100";
+  $("#next-topic-title").textContent = current?.title || "Все темы пройдены";
+  $("#next-topic-copy").textContent = current?.definition || "Закрепи знания в итоговом экзамене или повтори любой завершённый урок.";
+  $("#continue-button").textContent = current ? "Начать урок" : "Перейти к экзамену";
 }
 
 function renderModules() {
@@ -194,6 +225,26 @@ function renderModules() {
   }).join("");
 }
 
+function renderSequentialPath() {
+  const current = nextTopic();
+  const activeModuleId = current?.module || modules[modules.length - 1].id;
+  const activeModule = moduleMap[activeModuleId];
+  const moduleTopics = topics.filter((topic) => topic.module === activeModuleId);
+  const completed = moduleTopics.filter((topic) => state.studied.includes(topic.id)).length;
+  $("#lesson-path-summary").innerHTML = `<div><span>Сейчас</span><b>${activeModule.title}</b></div><strong>${completed}/${moduleTopics.length} уроков</strong>`;
+  $("#lesson-path").innerHTML = moduleTopics.map((topic) => {
+    const mastered = state.studied.includes(topic.id);
+    const unlocked = isTopicUnlocked(topic);
+    const stateClass = mastered ? "mastered" : unlocked ? "current" : "locked";
+    const stateText = mastered ? "Пройдено" : unlocked ? "Доступно сейчас" : "Откроется позже";
+    const icon = mastered ? "✓" : unlocked ? "▶" : "🔒";
+    return `<button class="lesson-path-item ${stateClass}" data-topic="${topic.id}" aria-label="Тема ${topic.id}: ${topic.title}. ${stateText}">
+      <span class="path-node">${icon}</span>
+      <span class="path-copy"><small>Тема ${topic.id}</small><b>${topic.title}</b><em>${stateText}</em></span>
+    </button>`;
+  }).join("");
+}
+
 function renderTopics() {
   const query = $("#topic-search").value.trim().toLowerCase();
   const unfinishedOnly = $("#unfinished-only").checked;
@@ -207,11 +258,15 @@ function renderTopics() {
 
   $("#topic-result-count").textContent = `${visible.length} ${wordForTopics(visible.length)}`;
   $("#topic-empty").hidden = visible.length !== 0;
-  $("#topic-list").innerHTML = visible.map((topic) => `<button class="topic-card ${state.studied.includes(topic.id) ? "studied" : ""}" data-topic="${topic.id}">
+  $("#topic-list").innerHTML = visible.map((topic) => {
+    const mastered = state.studied.includes(topic.id);
+    const unlocked = isTopicUnlocked(topic);
+    return `<button class="topic-card ${mastered ? "studied" : ""} ${!unlocked ? "locked" : ""}" data-topic="${topic.id}">
     <span class="topic-number">${topic.id}</span>
     <span><h3>${topic.title}</h3><p>${topic.definition}</p></span>
-    <span class="studied-indicator" aria-label="${state.studied.includes(topic.id) ? "Изучено" : "Не изучено"}">✓</span>
-  </button>`).join("");
+    <span class="studied-indicator" aria-label="${mastered ? "Пройдено" : unlocked ? "Текущий урок" : "Урок заблокирован"}">${mastered ? "✓" : unlocked ? "▶" : "🔒"}</span>
+  </button>`;
+  }).join("");
 }
 
 function wordForTopics(number) {
@@ -246,26 +301,178 @@ function openTopic(id) {
   }
   $("#dialog-question").textContent = `Объясни своими словами, какую проблему решает «${topic.title}», и приведи пример для завода электродвигателей.`;
   $("#dialog-note").value = state.notes[topic.id] || "";
-  updateStudiedButton();
+  updateLessonButton(topic);
   if (!$("#topic-dialog").open) $("#topic-dialog").showModal();
 }
 
-function updateStudiedButton() {
-  const studied = state.studied.includes(activeTopicId);
-  $("#toggle-studied").textContent = studied ? "Вернуть в неизученные" : "Отметить изученной";
-  $("#toggle-studied").classList.toggle("secondary", studied);
-  $("#toggle-studied").classList.toggle("primary", !studied);
+function updateLessonButton(topic = topicById(activeTopicId)) {
+  const button = $("#start-topic-lesson");
+  const mastered = state.studied.includes(topic.id);
+  const unlocked = isTopicUnlocked(topic);
+  button.disabled = !unlocked;
+  button.textContent = mastered ? "Повторить урок" : unlocked ? "Начать урок" : `Сначала пройди тему №${nextTopic()?.id}`;
+  button.classList.toggle("secondary", mastered || !unlocked);
+  button.classList.toggle("primary", unlocked && !mastered);
 }
 
-function toggleStudied(id = activeTopicId) {
-  const number = Number(id);
-  state.studied = state.studied.includes(number)
-    ? state.studied.filter((topicId) => topicId !== number)
-    : [...state.studied, number].sort((a, b) => a - b);
+function buildLessonQuestions(topic) {
+  const pool = topics.filter((item) => item.id !== topic.id && item.module === topic.module);
+  const definitionOptions = shuffle([topic, ...shuffle(pool).slice(0, 3)]).map((item) => ({ id: item.id, text: item.definition }));
+  const exampleOptions = shuffle([topic, ...shuffle(pool).slice(0, 3)]).map((item) => ({ id: item.id, text: item.details.example }));
+  return [
+    {
+      label: "Распознай понятие",
+      prompt: `Какое определение точнее всего описывает «${topic.title}»?`,
+      options: definitionOptions
+    },
+    {
+      label: "Примени на практике",
+      prompt: `Какой производственный пример относится к теме «${topic.title}»?`,
+      options: exampleOptions
+    }
+  ];
+}
+
+function startLesson(id = activeTopicId) {
+  const topic = topicById(id);
+  if (!topic || !isTopicUnlocked(topic)) return;
+  activeTopicId = topic.id;
+  lesson = {
+    topicId: topic.id,
+    step: 0,
+    answered: false,
+    errors: 0,
+    completed: false,
+    award: 0,
+    firstTime: !state.studied.includes(topic.id),
+    questions: buildLessonQuestions(topic)
+  };
+  if ($("#topic-dialog").open) $("#topic-dialog").close();
+  renderLesson();
+  if (!$("#lesson-dialog").open) $("#lesson-dialog").showModal();
+}
+
+function renderLesson() {
+  if (!lesson) return;
+  const topic = topicById(lesson.topicId);
+  const module = moduleMap[topic.module];
+  const body = $("#lesson-body");
+  const controls = $("#lesson-controls");
+  $("#lesson-label").textContent = `${module.title} · тема ${topic.id}`;
+  $("#lesson-step-label").textContent = lesson.step === 4 ? "Урок завершён" : `Шаг ${lesson.step + 1} из 4`;
+  $("#lesson-progress-bar").style.width = `${lesson.step === 4 ? 100 : (lesson.step + 1) * 25}%`;
+  controls.innerHTML = "";
+
+  if (lesson.step === 0) {
+    body.innerHTML = `<div class="lesson-copy">
+      <p class="eyebrow">Разберись в сути</p>
+      <h2>${topic.title}</h2>
+      <p class="lesson-definition">${topic.definition}</p>
+      <div class="memory-hook"><span>Опорная связь</span><strong>${topic.diagram.join(" → ")}</strong></div>
+      <ul class="lesson-key-points">${topic.details.points.slice(0, 2).map((point) => `<li>${point}</li>`).join("")}</ul>
+    </div>`;
+    controls.innerHTML = `<button class="button primary" id="lesson-next">Показать схему</button>`;
+    return;
+  }
+
+  if (lesson.step === 1) {
+    body.innerHTML = `<div class="lesson-copy">
+      <p class="eyebrow">Собери модель в голове</p>
+      <h2>${topic.title}</h2>
+      <div class="lesson-diagram" aria-label="Схема темы ${topic.title}">
+        ${topic.diagram.map((node, index) => `<div class="diagram-node"><small>${index === 0 ? "Вход" : index === 1 ? "Механизм" : "Результат"}</small><strong>${node}</strong></div>${index < 2 ? '<span class="diagram-arrow" aria-hidden="true">→</span>' : ""}`).join("")}
+      </div>
+      <div class="lesson-rule"><span>Не перепутай</span><p>${topic.details.distinction}</p></div>
+    </div>`;
+    controls.innerHTML = `<button class="button primary" id="lesson-next">Перейти к заданию</button>`;
+    return;
+  }
+
+  if (lesson.step === 2 || lesson.step === 3) {
+    const question = lesson.questions[lesson.step - 2];
+    body.innerHTML = `<div class="lesson-copy lesson-question">
+      <p class="eyebrow">${question.label}</p>
+      <h2>${question.prompt}</h2>
+      <div class="lesson-answer-list">${question.options.map((option) => `<button class="lesson-answer" data-lesson-answer="${option.id}">${option.text}</button>`).join("")}</div>
+      <div class="lesson-feedback" id="lesson-feedback" hidden></div>
+    </div>`;
+    return;
+  }
+
+  const next = nextTopic();
+  body.innerHTML = `<div class="lesson-result">
+    <span class="lesson-complete-mark">✓</span>
+    <p class="eyebrow">${lesson.firstTime ? "Новая тема освоена" : "Повторение завершено"}</p>
+    <h2>${topic.title}</h2>
+    <div class="reward-row"><strong>+${lesson.award} XP</strong><span>${state.streak || 0} ${dayWord(state.streak || 0)} подряд</span></div>
+    <p>${lesson.errors === 0 ? "Оба задания выполнены без ошибок." : `Ошибок до правильного ответа: ${lesson.errors}. Вернись к схеме, если связь ещё не закрепилась.`}</p>
+  </div>`;
+  controls.innerHTML = `<button class="button secondary" id="lesson-to-path">К маршруту</button><button class="button primary" id="lesson-continue">${next ? `Следующая тема · №${next.id}` : "Итоговый экзамен"}</button>`;
+}
+
+function dayWord(number) {
+  const mod100 = number % 100;
+  const mod10 = number % 10;
+  if (mod100 >= 11 && mod100 <= 14) return "дней";
+  if (mod10 === 1) return "день";
+  if (mod10 >= 2 && mod10 <= 4) return "дня";
+  return "дней";
+}
+
+function answerLessonQuestion(answerId, button) {
+  if (!lesson || lesson.answered || ![2, 3].includes(lesson.step)) return;
+  const feedback = $("#lesson-feedback");
+  if (Number(answerId) !== lesson.topicId) {
+    lesson.errors += 1;
+    button.classList.add("wrong");
+    button.disabled = true;
+    feedback.textContent = "Не совсем. Исключи этот вариант и сравни оставшиеся с опорной схемой.";
+    feedback.dataset.result = "wrong";
+    feedback.hidden = false;
+    return;
+  }
+  lesson.answered = true;
+  $$(".lesson-answer").forEach((answer) => {
+    answer.disabled = true;
+    if (Number(answer.dataset.lessonAnswer) === lesson.topicId) answer.classList.add("correct");
+  });
+  feedback.textContent = lesson.step === 2 ? "Верно. Ты распознал границы понятия." : "Верно. Ты связал термин с производственной ситуацией.";
+  feedback.dataset.result = "correct";
+  feedback.hidden = false;
+  $("#lesson-controls").innerHTML = `<button class="button primary" id="lesson-next">${lesson.step === 3 ? "Завершить урок" : "Следующее задание"}</button>`;
+}
+
+function completeLesson() {
+  if (!lesson || lesson.completed) return;
+  const firstTime = !state.studied.includes(lesson.topicId);
+  lesson.firstTime = firstTime;
+  lesson.award = firstTime ? Math.max(10, 20 - lesson.errors * 2) : Math.max(3, 6 - lesson.errors);
+  if (firstTime) state.studied = [...state.studied, lesson.topicId].sort((a, b) => a - b);
+  state.xp = (state.xp || 0) + lesson.award;
+  updateStreak();
+  lesson.completed = true;
   saveState();
-  updateStudiedButton();
   renderAll();
-  return state.studied.includes(number);
+}
+
+function advanceLesson() {
+  if (!lesson) return;
+  if ([2, 3].includes(lesson.step) && !lesson.answered) return;
+  if (lesson.step === 3) {
+    completeLesson();
+    lesson.step = 4;
+  } else if (lesson.step < 3) {
+    lesson.step += 1;
+    lesson.answered = false;
+  }
+  renderLesson();
+}
+
+function continueLearning() {
+  if ($("#lesson-dialog").open) $("#lesson-dialog").close();
+  const next = nextTopic();
+  if (next) startLesson(next.id);
+  else showView("quiz");
 }
 
 const simStages = [
@@ -419,6 +626,7 @@ function finishQuiz() {
 function renderAll() {
   renderProgress();
   renderModules();
+  renderSequentialPath();
   renderTopics();
 }
 
@@ -449,6 +657,14 @@ document.addEventListener("click", (event) => {
   if (qualityButton) handleQuality(qualityButton.dataset.quality);
   const answerButton = event.target.closest("[data-answer]");
   if (answerButton) answerQuestion(answerButton.dataset.answer);
+  const lessonAnswer = event.target.closest("[data-lesson-answer]");
+  if (lessonAnswer) answerLessonQuestion(lessonAnswer.dataset.lessonAnswer, lessonAnswer);
+  if (event.target.closest("#lesson-next")) advanceLesson();
+  if (event.target.closest("#lesson-continue")) continueLearning();
+  if (event.target.closest("#lesson-to-path")) {
+    $("#lesson-dialog").close();
+    showView("overview");
+  }
   if (event.target.closest("#restart-quiz")) startQuiz();
 });
 
@@ -461,10 +677,11 @@ $("#save-note").addEventListener("click", () => {
   $("#save-note").textContent = "Сохранено";
   setTimeout(() => { $("#save-note").textContent = "Сохранить заметку"; }, 1000);
 });
-$("#toggle-studied").addEventListener("click", () => toggleStudied());
+$("#start-topic-lesson").addEventListener("click", () => startLesson(activeTopicId));
+$("#lesson-close").addEventListener("click", () => $("#lesson-dialog").close());
 $("#continue-button").addEventListener("click", () => {
-  const next = topics.find((topic) => !state.studied.includes(topic.id));
-  if (next) openTopic(next.id); else showView("quiz");
+  const next = nextTopic();
+  if (next) startLesson(next.id); else showView("quiz");
 });
 $("#reset-simulator").addEventListener("click", resetSimulator);
 $("#start-quiz").addEventListener("click", startQuiz);
@@ -531,21 +748,28 @@ function registerWebMcpTools() {
     {
       name: "get_learning_progress",
       title: "Показать учебный прогресс",
-      description: "Возвращает количество изученных тем и лучший результат экзамена.",
+      description: "Возвращает количество пройденных уроков, опыт, серию и следующий доступный урок.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true, untrustedContentHint: false },
-      execute: () => ({ studied: state.studied.length, total: topics.length, percent: Math.round(state.studied.length), quizBest: state.quizBest })
+      execute: () => ({
+        studied: state.studied.length,
+        total: topics.length,
+        percent: Math.round((state.studied.length / topics.length) * 100),
+        xp: state.xp || 0,
+        streak: state.streak || 0,
+        nextTopic: nextTopic() ? { id: nextTopic().id, title: nextTopic().title } : null,
+        quizBest: state.quizBest
+      })
     },
     {
-      name: "mark_topics_studied",
-      title: "Отметить темы изученными",
-      description: "Отмечает один или несколько номеров тем как изученные и обновляет интерфейс.",
-      inputSchema: { type: "object", properties: { topicIds: { type: "array", items: { type: "integer", minimum: 1, maximum: 100 }, minItems: 1 } }, required: ["topicIds"], additionalProperties: false },
-      annotations: { readOnlyHint: false, untrustedContentHint: false },
-      execute: ({ topicIds }) => {
-        state.studied = [...new Set([...state.studied, ...topicIds.filter((id) => topicById(id))])].sort((a, b) => a - b);
-        saveState(); renderAll();
-        return { studied: state.studied.length, total: topics.length };
+      name: "get_current_lesson",
+      title: "Показать следующий урок",
+      description: "Возвращает первую непройденную тему последовательного маршрута.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      execute: () => {
+        const current = nextTopic();
+        return current ? { topicId: current.id, title: current.title, module: moduleMap[current.module].title } : { completed: true };
       }
     },
     {

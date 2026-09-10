@@ -20,12 +20,12 @@
           <span class="brand-mark" aria-hidden="true">ЦЗ</span>
           <span>
             <strong>Цех знаний</strong>
-            <small>MES / MOM navigator · v0.2.0</small>
+            <small>MES / MOM navigator · v0.3.0</small>
           </span>
         </button>
 
         <nav class="primary-nav" aria-label="Разделы приложения">
-          <button class="nav-button active" data-view="overview">Обзор</button>
+          <button class="nav-button active" data-view="overview">Учиться</button>
           <button class="nav-button" data-view="topics">100 тем</button>
           <button class="nav-button" data-view="simulator">Симулятор</button>
           <button class="nav-button" data-view="quiz">Экзамен</button>
@@ -41,20 +41,18 @@
         <section class="view active" id="overview-view">
           <div class="overview-grid">
             <article class="welcome-panel panel">
-              <p class="eyebrow">Персональный маршрут · Прикладная информатика</p>
-              <h1>Разбери цифровой завод<br />по слоям</h1>
-              <p class="lead">
-                Изучай термины в контексте, проверяй себя и проводи учебный
-                производственный заказ от плана до выпуска.
-              </p>
+              <p class="eyebrow" id="next-topic-kicker">Следующий урок · тема 1 из 100</p>
+              <h1 id="next-topic-title">MES и MOM-системы</h1>
+              <p class="lead" id="next-topic-copy">Короткий урок: объяснение, схема и два задания на закрепление.</p>
               <div class="welcome-actions">
-                <button class="button primary" id="continue-button">Продолжить обучение</button>
+                <button class="button primary" id="continue-button">Начать урок</button>
                 <button class="button secondary" data-view="simulator">Открыть симулятор</button>
                 <button class="button secondary" id="install-app">Установка и офлайн</button>
               </div>
               <dl class="quick-stats">
                 <div><dt id="studied-count">0</dt><dd>тем изучено</dd></div>
-                <div><dt id="module-count">9</dt><dd>модулей</dd></div>
+                <div><dt id="xp-count">0</dt><dd>очков опыта</dd></div>
+                <div><dt id="streak-count">0</dt><dd>дней подряд</dd></div>
                 <div><dt id="quiz-best">—</dt><dd>лучший экзамен</dd></div>
               </dl>
             </article>
@@ -90,6 +88,17 @@
               <button class="text-button" data-view="topics">Показать все темы →</button>
             </div>
             <div class="module-grid" id="module-grid"></div>
+          </section>
+
+          <section class="sequential-learning" aria-labelledby="sequence-title">
+            <div class="section-heading">
+              <div><p class="eyebrow">Один урок за другим</p><h2 id="sequence-title">Текущий участок маршрута</h2></div>
+              <span class="path-rule">Следующая тема открывается после практики</span>
+            </div>
+            <div class="lesson-path-panel panel">
+              <div class="lesson-path-summary" id="lesson-path-summary"></div>
+              <div class="lesson-path" id="lesson-path"></div>
+            </div>
           </section>
         </section>
 
@@ -208,8 +217,21 @@
       </div>
       <div class="dialog-actions">
         <button class="button secondary" id="save-note">Сохранить заметку</button>
-        <button class="button primary" id="toggle-studied">Отметить изученной</button>
+        <button class="button primary" id="start-topic-lesson">Начать урок</button>
       </div>
+    </dialog>
+
+    <dialog class="lesson-dialog" id="lesson-dialog">
+      <div class="lesson-head">
+        <div>
+          <span class="topic-module-label" id="lesson-label">Урок</span>
+          <strong id="lesson-step-label">Шаг 1 из 4</strong>
+        </div>
+        <button class="dialog-close" id="lesson-close" aria-label="Закрыть урок">×</button>
+      </div>
+      <div class="lesson-progress progress-track"><i id="lesson-progress-bar"></i></div>
+      <div class="lesson-body" id="lesson-body"></div>
+      <div class="lesson-controls" id="lesson-controls"></div>
     </dialog>
 
     <dialog class="topic-dialog offline-dialog" id="offline-dialog">
@@ -237,6 +259,7 @@
     </dialog>
 
     <script src="topic-details.js"></script>
+    <script src="topic-diagrams.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
