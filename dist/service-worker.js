@@ -1,5 +1,5 @@
-const CACHE = "ceh-znaniy-0.1.0";
-const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./icon.svg"];
+const CACHE = "ceh-znaniy-0.2.0";
+const ASSETS = ["./", "./index.html", "./styles.css", "./topic-details.js", "./app.js", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));

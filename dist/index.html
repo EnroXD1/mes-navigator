@@ -20,7 +20,7 @@
           <span class="brand-mark" aria-hidden="true">ЦЗ</span>
           <span>
             <strong>Цех знаний</strong>
-            <small>MES / MOM navigator · v0.1.0</small>
+            <small>MES / MOM navigator · v0.2.0</small>
           </span>
         </button>
 
@@ -50,7 +50,7 @@
               <div class="welcome-actions">
                 <button class="button primary" id="continue-button">Продолжить обучение</button>
                 <button class="button secondary" data-view="simulator">Открыть симулятор</button>
-                <button class="button secondary" id="install-app">Установить на телефон</button>
+                <button class="button secondary" id="install-app">Установка и офлайн</button>
               </div>
               <dl class="quick-stats">
                 <div><dt id="studied-count">0</dt><dd>тем изучено</dd></div>
@@ -197,8 +197,12 @@
         <button class="dialog-close" id="dialog-close" aria-label="Закрыть">×</button>
       </div>
       <div class="dialog-content">
-        <section><h3>Коротко</h3><p id="dialog-definition"></p></section>
-        <section><h3>Зачем это знать</h3><p id="dialog-context"></p></section>
+        <section><h3>Определение</h3><p id="dialog-definition"></p></section>
+        <section class="detail-section"><h3>Как это устроено</h3><ul id="dialog-points" class="detail-points"></ul></section>
+        <section class="example-section"><h3>Пример на производстве</h3><p id="dialog-example"></p></section>
+        <section class="distinction-section"><h3>Что важно не перепутать</h3><p id="dialog-distinction"></p></section>
+        <section><h3>Связанные темы</h3><div id="dialog-related" class="related-topics"></div></section>
+        <section id="dialog-source-section" hidden><h3>Официальный материал</h3><a id="dialog-source" class="source-link" target="_blank" rel="noopener noreferrer"></a></section>
         <section class="self-check"><span>Проверь себя</span><p id="dialog-question"></p></section>
         <label class="notes-field">Моя заметка<textarea id="dialog-note" rows="4" placeholder="Запиши объяснение своими словами…"></textarea></label>
       </div>
@@ -208,6 +212,31 @@
       </div>
     </dialog>
 
+    <dialog class="topic-dialog offline-dialog" id="offline-dialog">
+      <div class="dialog-head">
+        <div><span class="topic-module-label">Android · PWA</span><h2>Установка и работа без интернета</h2></div>
+        <button class="dialog-close" id="offline-close" aria-label="Закрыть">×</button>
+      </div>
+      <div class="dialog-content">
+        <div class="offline-status" id="offline-status" data-state="loading">Подготавливаем файлы для автономной работы…</div>
+        <ol class="offline-steps">
+          <li><b>Откройте приложение в Chrome.</b><span>Перейдите на опубликованный адрес при подключённом интернете и дождитесь полной загрузки главного экрана.</span></li>
+          <li><b>Установите на телефон.</b><span>Нажмите кнопку ниже. Если окно не появилось, откройте меню Chrome ⋮ и выберите «Установить приложение» или «Добавить на главный экран».</span></li>
+          <li><b>Один раз запустите значок онлайн.</b><span>Это сохранит текущую версию: все 100 тем, стили, экзамен и симулятор.</span></li>
+          <li><b>Занимайтесь офлайн.</b><span>Открывайте «Цех знаний» с главного экрана без сети. Прогресс и заметки хранятся только на этом устройстве.</span></li>
+          <li><b>Получайте обновления.</b><span>Периодически запускайте приложение с интернетом и обновляйте страницу. Новая версия заменит старый офлайн-кэш.</span></li>
+        </ol>
+        <div class="offline-notes">
+          <p><b>Важно:</b> не очищайте данные Chrome для этого сайта — вместе с ними удалятся локальный прогресс, заметки и офлайн-файлы.</p>
+          <p>Внешние ссылки без интернета не откроются, но учебные материалы и функции приложения останутся доступны.</p>
+        </div>
+      </div>
+      <div class="dialog-actions">
+        <button class="button primary" id="install-from-guide">Показать способ установки</button>
+      </div>
+    </dialog>
+
+    <script src="topic-details.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

@@ -124,7 +124,14 @@ const moduleFor = (id) => {
   if (id <= 88) return "product";
   return "platforms";
 };
-const topics = rawTopics.map(([id, title, definition]) => ({ id, title, definition, module: moduleFor(id) }));
+const topicDetails = window.TOPIC_DETAILS || {};
+const topics = rawTopics.map(([id, title, definition]) => ({
+  id,
+  title,
+  definition,
+  module: moduleFor(id),
+  details: topicDetails[id] || { points: [], example: "", distinction: "", related: [], source: null }
+}));
 const moduleMap = Object.fromEntries(modules.map((module) => [module.id, module]));
 
 const defaultState = {
@@ -192,7 +199,8 @@ function renderTopics() {
   const unfinishedOnly = $("#unfinished-only").checked;
   const visible = topics.filter((topic) => {
     const matchesModule = selectedModule === "all" || topic.module === selectedModule;
-    const matchesQuery = !query || `${topic.title} ${topic.definition}`.toLowerCase().includes(query);
+    const detailText = `${topic.details.points.join(" ")} ${topic.details.example} ${topic.details.distinction}`;
+    const matchesQuery = !query || `${topic.title} ${topic.definition} ${detailText}`.toLowerCase().includes(query);
     const matchesProgress = !unfinishedOnly || !state.studied.includes(topic.id);
     return matchesModule && matchesQuery && matchesProgress;
   });
@@ -223,11 +231,23 @@ function openTopic(id) {
   $("#dialog-module").textContent = `${module.title} · тема ${topic.id}`;
   $("#dialog-title").textContent = topic.title;
   $("#dialog-definition").textContent = topic.definition;
-  $("#dialog-context").textContent = `${module.description} Понимание этой темы помогает связать отдельный термин с общей моделью цифрового предприятия.`;
+  $("#dialog-points").innerHTML = topic.details.points.map((point) => `<li>${point}</li>`).join("");
+  $("#dialog-example").textContent = topic.details.example;
+  $("#dialog-distinction").textContent = topic.details.distinction;
+  $("#dialog-related").innerHTML = topic.details.related.map((relatedId) => {
+    const related = topicById(relatedId);
+    return related ? `<button type="button" data-topic="${related.id}">№${related.id} · ${related.title}</button>` : "";
+  }).join("");
+  const sourceSection = $("#dialog-source-section");
+  sourceSection.hidden = !topic.details.source;
+  if (topic.details.source) {
+    $("#dialog-source").textContent = topic.details.source[0];
+    $("#dialog-source").href = topic.details.source[1];
+  }
   $("#dialog-question").textContent = `Объясни своими словами, какую проблему решает «${topic.title}», и приведи пример для завода электродвигателей.`;
   $("#dialog-note").value = state.notes[topic.id] || "";
   updateStudiedButton();
-  $("#topic-dialog").showModal();
+  if (!$("#topic-dialog").open) $("#topic-dialog").showModal();
 }
 
 function updateStudiedButton() {
@@ -452,23 +472,57 @@ $("#next-question").addEventListener("click", nextQuestion);
 $("#active-term-link").addEventListener("click", (event) => openTopic(event.currentTarget.dataset.topic));
 
 let installPrompt = null;
+
+function updateOfflineStatus(message, stateName = "ready") {
+  const status = $("#offline-status");
+  status.textContent = message;
+  status.dataset.state = stateName;
+}
+
+function openOfflineGuide() {
+  if (window.matchMedia("(display-mode: standalone)").matches) {
+    updateOfflineStatus("Приложение уже установлено. После первого полного открытия материалы доступны без сети.");
+  } else if (!navigator.onLine) {
+    updateOfflineStatus("Сейчас нет сети, но кэшированная версия приложения работает.", "offline");
+  } else if (navigator.serviceWorker?.controller) {
+    updateOfflineStatus("Офлайн-кэш готов. Можно устанавливать приложение и отключать интернет.");
+  } else {
+    updateOfflineStatus("Подготавливаем файлы для автономной работы…", "loading");
+  }
+  $("#offline-dialog").showModal();
+}
+
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
   installPrompt = event;
+  $("#install-from-guide").textContent = "Установить приложение";
 });
-$("#install-app").addEventListener("click", async () => {
+$("#install-app").addEventListener("click", openOfflineGuide);
+$("#offline-close").addEventListener("click", () => $("#offline-dialog").close());
+$("#install-from-guide").addEventListener("click", async () => {
   if (installPrompt) {
     installPrompt.prompt();
-    await installPrompt.userChoice;
+    const choice = await installPrompt.userChoice;
     installPrompt = null;
+    updateOfflineStatus(choice.outcome === "accepted" ? "Установка подтверждена. Значок появится на главном экране." : "Установка отменена — инструкцией ниже можно воспользоваться позже.");
   } else {
-    alert("На Android открой меню браузера и выбери «Установить приложение» или «Добавить на главный экран».");
+    updateOfflineStatus("Если системное окно не появилось, откройте меню ⋮ в Chrome и выберите «Установить приложение» или «Добавить на главный экран».");
   }
 });
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js").catch(() => {}));
+  window.addEventListener("load", async () => {
+    try {
+      await navigator.serviceWorker.register("./service-worker.js");
+      await navigator.serviceWorker.ready;
+      updateOfflineStatus("Офлайн-кэш готов. Можно устанавливать приложение и отключать интернет.");
+    } catch {
+      updateOfflineStatus("Не удалось подготовить офлайн-режим. Проверьте соединение и обновите страницу.", "error");
+    }
+  });
 }
+window.addEventListener("offline", () => updateOfflineStatus("Сейчас нет сети, но кэшированная версия приложения работает.", "offline"));
+window.addEventListener("online", () => updateOfflineStatus("Соединение восстановлено. Обновления приложения снова доступны."));
 
 function registerWebMcpTools() {
   const context = document.modelContext;
