@@ -1,4 +1,4 @@
-const CACHE = "ceh-znaniy-v1";
+const CACHE = "ceh-znaniy-0.1.0";
 const ASSETS = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
