@@ -127,6 +127,7 @@ const moduleFor = (id) => {
 const topicDetails = window.TOPIC_DETAILS || {};
 const topicDiagrams = window.TOPIC_DIAGRAMS || {};
 const abbreviations = window.ABBREVIATIONS || [];
+const pd96Course = window.PD96_COURSE || { stages: [], modules: [], sourceStats: {} };
 const topics = rawTopics.map(([id, title, definition]) => ({
   id,
   title,
@@ -144,13 +145,24 @@ const defaultState = {
   xp: 0,
   streak: 0,
   lastStudyDate: null,
+  pd96: {
+    completedModules: [],
+    completedPractices: [],
+    confidentQuestions: [],
+    reviewQuestions: []
+  },
   simulator: { index: 0, defect: false, log: ["Заказ МО-2407 создан в ERP и передан в MES"] }
 };
 
 function loadState() {
   try {
     const stored = JSON.parse(localStorage.getItem("ceh-znaniy-state"));
-    return stored ? { ...defaultState, ...stored, simulator: { ...defaultState.simulator, ...stored.simulator } } : structuredClone(defaultState);
+    return stored ? {
+      ...defaultState,
+      ...stored,
+      pd96: { ...defaultState.pd96, ...stored.pd96 },
+      simulator: { ...defaultState.simulator, ...stored.simulator }
+    } : structuredClone(defaultState);
   } catch {
     return structuredClone(defaultState);
   }
@@ -162,9 +174,18 @@ let activeTopicId = 1;
 let quiz = null;
 let lesson = null;
 let pendingProgressImport = null;
+let selectedPd96Stage = "all";
+let activePd96ModuleId = 1;
+let activePd96QuestionIndex = 0;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+const escapeHtml = (value) => String(value)
+  .replaceAll("&", "&amp;")
+  .replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;")
+  .replaceAll('"', "&quot;")
+  .replaceAll("'", "&#039;");
 const saveState = () => {
   localStorage.setItem("ceh-znaniy-state", JSON.stringify(state));
   if (typeof window.dispatchEvent === "function" && typeof CustomEvent !== "undefined") {
@@ -212,6 +233,159 @@ function renderProgress() {
   $("#next-topic-title").textContent = current?.title || "Все темы пройдены";
   $("#next-topic-copy").textContent = current?.definition || "Закрепи знания в итоговом экзамене или повтори любой завершённый урок.";
   $("#continue-button").textContent = current ? "Начать урок" : "Перейти к экзамену";
+  $("#pd96-overview-progress").textContent = `${state.pd96.completedModules.length}/25`;
+}
+
+const pd96ModuleById = (id) => pd96Course.modules.find((module) => module.id === Number(id));
+const nextPd96Module = () => pd96Course.modules.find((module) => !state.pd96.completedModules.includes(module.id)) || null;
+const isPd96ModuleUnlocked = (module) => state.pd96.completedModules.includes(module.id) || module.id === nextPd96Module()?.id;
+const pd96PracticeKey = (moduleId, practiceIndex) => `${moduleId}:${practiceIndex}`;
+
+function pd96Questions(module) {
+  return [
+    ...module.questions.map((question) => ({ ...question, key: `base:${question.id}`, source: "Базовый вопрос" })),
+    ...module.advancedQuestions.map((question) => ({ ...question, key: `advanced:${question.id}`, source: "Углублённый вопрос" }))
+  ];
+}
+
+function pd96ModuleProgress(module) {
+  const questionKeys = new Set(pd96Questions(module).map((question) => question.key));
+  const confident = state.pd96.confidentQuestions.filter((key) => questionKeys.has(key)).length;
+  const practices = state.pd96.completedPractices.filter((key) => key.startsWith(`${module.id}:`)).length;
+  return {
+    confident,
+    practices,
+    ready: confident >= 3 && practices >= 1,
+    completed: state.pd96.completedModules.includes(module.id)
+  };
+}
+
+function pd96CountLabel(number, forms) {
+  const mod100 = number % 100;
+  const mod10 = number % 10;
+  if (mod100 >= 11 && mod100 <= 14) return `${number} ${forms[2]}`;
+  if (mod10 === 1) return `${number} ${forms[0]}`;
+  if (mod10 >= 2 && mod10 <= 4) return `${number} ${forms[1]}`;
+  return `${number} ${forms[2]}`;
+}
+
+function renderPd96() {
+  const completed = state.pd96.completedModules.length;
+  const percent = Math.round((completed / pd96Course.modules.length) * 100);
+  $("#pd96-progress-label").textContent = `${completed} из ${pd96Course.modules.length} модулей`;
+  $("#pd96-progress-percent").textContent = `${percent}%`;
+  $("#pd96-progress-bar").style.width = `${percent}%`;
+  $("#pd96-stage-filter").innerHTML = [
+    `<button class="filter-button ${selectedPd96Stage === "all" ? "active" : ""}" data-pd96-stage="all"><span>Все этапы</span><b>25</b></button>`,
+    ...pd96Course.stages.map((stage) => `<button class="filter-button ${selectedPd96Stage === stage.id ? "active" : ""}" data-pd96-stage="${stage.id}"><span>${escapeHtml(stage.title)}</span><b>${stage.modules.length}</b></button>`)
+  ].join("");
+
+  const allowedModules = selectedPd96Stage === "all"
+    ? null
+    : new Set(pd96Course.stages.find((stage) => stage.id === selectedPd96Stage)?.modules || []);
+  const visibleModules = pd96Course.modules.filter((module) => !allowedModules || allowedModules.has(module.id));
+  $("#pd96-module-list").innerHTML = visibleModules.map((module) => {
+    const progress = pd96ModuleProgress(module);
+    const unlocked = isPd96ModuleUnlocked(module);
+    const stateClass = progress.completed ? "completed" : unlocked ? "current" : "locked";
+    const stateLabel = progress.completed ? "Пройден" : unlocked ? "Доступен" : "Закрыт";
+    const icon = progress.completed ? "✓" : unlocked ? "▶" : "🔒";
+    return `<button class="pd96-module-card ${stateClass}" data-pd96-module="${module.id}" ${unlocked ? "" : "disabled"}>
+      <span class="pd96-card-number">${icon}<b>${String(module.id).padStart(2, "0")}</b></span>
+      <span class="pd96-card-copy"><small>${escapeHtml(module.level)}</small><strong>${escapeHtml(module.title)}</strong><em>${pd96CountLabel(progress.confident, ["уверенный ответ", "уверенных ответа", "уверенных ответов"])} · ${pd96CountLabel(progress.practices, ["практика", "практики", "практик"])}</em></span>
+      <span class="pd96-card-state">${stateLabel}</span>
+    </button>`;
+  }).join("");
+}
+
+function openPd96Module(id) {
+  const module = pd96ModuleById(id);
+  if (!module || !isPd96ModuleUnlocked(module)) return;
+  activePd96ModuleId = module.id;
+  const questions = pd96Questions(module);
+  activePd96QuestionIndex = Math.max(0, questions.findIndex((question) => !state.pd96.confidentQuestions.includes(question.key)));
+  renderPd96Dialog();
+  const dialog = $("#pd96-dialog");
+  if (!dialog.open) dialog.showModal();
+  dialog.scrollTop = 0;
+}
+
+function renderPd96Dialog() {
+  const module = pd96ModuleById(activePd96ModuleId);
+  if (!module) return;
+  const questions = pd96Questions(module);
+  activePd96QuestionIndex = Math.min(activePd96QuestionIndex, questions.length - 1);
+  const question = questions[activePd96QuestionIndex];
+  const progress = pd96ModuleProgress(module);
+  $("#pd96-dialog-level").textContent = `Модуль ${module.id} из 25 · ${module.level}`;
+  $("#pd96-dialog-title").textContent = module.title;
+  $("#pd96-dialog-goal").textContent = module.goal;
+  $("#pd96-legal-note").hidden = module.id < 21;
+  $("#pd96-dialog-concepts").innerHTML = module.concepts.map((concept) => `<li>${escapeHtml(concept)}</li>`).join("");
+  $("#pd96-practice-list").innerHTML = module.practices.map((practice, index) => {
+    const key = pd96PracticeKey(module.id, index);
+    const done = state.pd96.completedPractices.includes(key);
+    return `<button class="pd96-practice ${done ? "done" : ""}" data-pd96-practice="${index}"><span>${done ? "✓" : "○"}</span><b>${escapeHtml(practice)}</b></button>`;
+  }).join("");
+  $("#pd96-practice-status").textContent = progress.practices ? `${progress.practices} выполнено` : "Нужна 1";
+  $("#pd96-question-progress").textContent = `Вопрос ${activePd96QuestionIndex + 1} из ${questions.length} · уверенно: ${progress.confident}`;
+  $("#pd96-question-source").textContent = question.source;
+  $("#pd96-question-text").textContent = question.text;
+  const confident = state.pd96.confidentQuestions.includes(question.key);
+  const review = state.pd96.reviewQuestions.includes(question.key);
+  $("#pd96-master-question").textContent = confident ? "Уверенно ✓" : "Ответил уверенно";
+  $("#pd96-review-question").textContent = review ? "Отмечено для повтора" : "Нужно повторить";
+  $("#pd96-related-topics").innerHTML = module.relatedTopics.map((topicId) => {
+    const topic = topicById(topicId);
+    return topic ? `<button type="button" data-topic="${topic.id}">№${topic.id} · ${escapeHtml(topic.title)}</button>` : "";
+  }).join("");
+  $("#pd96-complete-module").disabled = !progress.ready || progress.completed;
+  $("#pd96-complete-module").textContent = progress.completed ? "Модуль завершён ✓" : "Завершить модуль";
+  $("#pd96-completion-hint").textContent = progress.completed
+    ? "Результат сохранён и синхронизируется вместе с общим прогрессом."
+    : `Готовность: ${Math.min(progress.practices, 1)}/1 практика · ${Math.min(progress.confident, 3)}/3 ответа`;
+}
+
+function togglePd96Practice(index) {
+  const key = pd96PracticeKey(activePd96ModuleId, Number(index));
+  const current = new Set(state.pd96.completedPractices);
+  current.has(key) ? current.delete(key) : current.add(key);
+  state.pd96.completedPractices = [...current].sort();
+  saveState();
+  renderPd96();
+  renderPd96Dialog();
+}
+
+function assessPd96Question(confident) {
+  const module = pd96ModuleById(activePd96ModuleId);
+  const question = pd96Questions(module)[activePd96QuestionIndex];
+  const mastered = new Set(state.pd96.confidentQuestions);
+  const review = new Set(state.pd96.reviewQuestions);
+  if (confident) {
+    mastered.add(question.key);
+    review.delete(question.key);
+  } else {
+    review.add(question.key);
+    mastered.delete(question.key);
+  }
+  state.pd96.confidentQuestions = [...mastered].sort();
+  state.pd96.reviewQuestions = [...review].sort();
+  saveState();
+  activePd96QuestionIndex = (activePd96QuestionIndex + 1) % pd96Questions(module).length;
+  renderPd96();
+  renderPd96Dialog();
+}
+
+function completePd96Module() {
+  const module = pd96ModuleById(activePd96ModuleId);
+  const progress = pd96ModuleProgress(module);
+  if (!progress.ready || progress.completed) return;
+  state.pd96.completedModules = [...state.pd96.completedModules, module.id].sort((a, b) => a - b);
+  state.xp = (state.xp || 0) + 30;
+  updateStreak();
+  saveState();
+  renderAll();
+  renderPd96Dialog();
 }
 
 function renderModules() {
@@ -698,6 +872,7 @@ function renderAll() {
   renderSequentialPath();
   renderTopics();
   renderGlossary();
+  renderPd96();
 }
 
 document.addEventListener("click", (event) => {
@@ -707,6 +882,7 @@ document.addEventListener("click", (event) => {
   const topicButton = event.target.closest("[data-topic]");
   if (topicButton) {
     if ($("#abbreviation-dialog").open) $("#abbreviation-dialog").close();
+    if ($("#pd96-dialog").open) $("#pd96-dialog").close();
     openTopic(topicButton.dataset.topic);
   }
 
@@ -727,6 +903,27 @@ document.addEventListener("click", (event) => {
     $$(".filter-button").forEach((button) => button.classList.toggle("active", button === filterButton));
     renderTopics();
   }
+
+  const pd96StageButton = event.target.closest("[data-pd96-stage]");
+  if (pd96StageButton) {
+    selectedPd96Stage = pd96StageButton.dataset.pd96Stage;
+    renderPd96();
+  }
+
+  const pd96ModuleButton = event.target.closest("[data-pd96-module]");
+  if (pd96ModuleButton) openPd96Module(pd96ModuleButton.dataset.pd96Module);
+
+  const pd96PracticeButton = event.target.closest("[data-pd96-practice]");
+  if (pd96PracticeButton) togglePd96Practice(pd96PracticeButton.dataset.pd96Practice);
+
+  if (event.target.closest("#pd96-master-question")) assessPd96Question(true);
+  if (event.target.closest("#pd96-review-question")) assessPd96Question(false);
+  if (event.target.closest("#pd96-next-question")) {
+    const module = pd96ModuleById(activePd96ModuleId);
+    activePd96QuestionIndex = (activePd96QuestionIndex + 1) % pd96Questions(module).length;
+    renderPd96Dialog();
+  }
+  if (event.target.closest("#pd96-complete-module")) completePd96Module();
 
   if (event.target.closest("#advance-simulator")) advanceSimulator();
   const qualityButton = event.target.closest("[data-quality]");
@@ -749,6 +946,7 @@ $("#glossary-search").addEventListener("input", renderGlossary);
 $("#unfinished-only").addEventListener("change", renderTopics);
 $("#dialog-close").addEventListener("click", () => $("#topic-dialog").close());
 $("#abbreviation-close").addEventListener("click", () => $("#abbreviation-dialog").close());
+$("#pd96-dialog-close").addEventListener("click", () => $("#pd96-dialog").close());
 $("#save-note").addEventListener("click", () => {
   state.notes[activeTopicId] = $("#dialog-note").value.trim();
   saveState();
@@ -791,7 +989,7 @@ function exportedProgress() {
   return {
     format: PROGRESS_TRANSFER_FORMAT,
     version: 1,
-    appVersion: "0.5.1",
+    appVersion: "0.6.0",
     exportedAt: new Date().toISOString(),
     state: structuredClone(state)
   };
@@ -811,13 +1009,21 @@ function downloadProgress() {
 }
 
 function compactProgress() {
+  const baseQuestions = state.pd96.confidentQuestions.filter((key) => key.startsWith("base:")).map((key) => Number(key.split(":")[1]));
+  const advancedQuestions = state.pd96.confidentQuestions.filter((key) => key.startsWith("advanced:")).map((key) => Number(key.split(":")[1]));
   return {
     v: 1,
     s: [...state.studied],
     x: state.xp || 0,
     q: state.quizBest,
     r: state.streak || 0,
-    d: state.lastStudyDate
+    d: state.lastStudyDate,
+    p: {
+      m: [...state.pd96.completedModules],
+      t: [...state.pd96.completedPractices],
+      b: baseQuestions,
+      a: advancedQuestions
+    }
   };
 }
 
@@ -837,7 +1043,22 @@ function decodeProgressCode(input) {
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
   const compact = JSON.parse(new TextDecoder().decode(bytes));
   if (compact.v !== 1 || !Array.isArray(compact.s)) throw new Error("Неизвестный формат QR-кода.");
-  return { studied: compact.s, xp: compact.x, quizBest: compact.q, streak: compact.r, lastStudyDate: compact.d };
+  return {
+    studied: compact.s,
+    xp: compact.x,
+    quizBest: compact.q,
+    streak: compact.r,
+    lastStudyDate: compact.d,
+    pd96: {
+      completedModules: compact.p?.m || [],
+      completedPractices: compact.p?.t || [],
+      confidentQuestions: [
+        ...(compact.p?.b || []).map((id) => `base:${id}`),
+        ...(compact.p?.a || []).map((id) => `advanced:${id}`)
+      ],
+      reviewQuestions: []
+    }
+  };
 }
 
 function sanitizeProgress(raw) {
@@ -862,6 +1083,20 @@ function sanitizeProgress(raw) {
     quizBest,
     lastStudyDate: date
   };
+  const pd96 = candidate.pd96 && typeof candidate.pd96 === "object" ? candidate.pd96 : {};
+  const stringSet = (values, validator) => [...new Set(
+    (Array.isArray(values) ? values : []).map(String).filter(validator)
+  )].sort();
+  imported.pd96 = {
+    completedModules: [...new Set((Array.isArray(pd96.completedModules) ? pd96.completedModules : [])
+      .map(Number).filter((id) => Number.isInteger(id) && id >= 1 && id <= pd96Course.modules.length))].sort((a, b) => a - b),
+    completedPractices: stringSet(pd96.completedPractices, (key) => {
+      const match = key.match(/^(\d{1,2}):(\d+)$/);
+      return Boolean(match) && Number(match[1]) >= 1 && Number(match[1]) <= pd96Course.modules.length;
+    }),
+    confidentQuestions: stringSet(pd96.confidentQuestions, (key) => /^(base|advanced):\d+$/.test(key)),
+    reviewQuestions: stringSet(pd96.reviewQuestions, (key) => /^(base|advanced):\d+$/.test(key))
+  };
   if (candidate.simulator && typeof candidate.simulator === "object") {
     imported.simulator = {
       index: Math.min(simStages.length - 1, numberOrZero(candidate.simulator.index)),
@@ -875,10 +1110,11 @@ function sanitizeProgress(raw) {
 function prepareProgressImport(raw, label = "резервной копии") {
   const imported = sanitizeProgress(raw);
   const newTopics = imported.studied.filter((id) => !state.studied.includes(id)).length;
+  const newPd96Modules = imported.pd96.completedModules.filter((id) => !state.pd96.completedModules.includes(id)).length;
   const noteCount = Object.keys(imported.notes).length;
   pendingProgressImport = imported;
   $("#import-preview-title").textContent = `${imported.studied.length} ${wordForTopics(imported.studied.length)} в ${label}`;
-  $("#import-preview-copy").textContent = `Будет добавлено новых тем: ${newTopics}. Заметок в копии: ${noteCount}. XP в копии: ${imported.xp}.`;
+  $("#import-preview-copy").textContent = `Новых базовых тем: ${newTopics}. Новых модулей PD96: ${newPd96Modules}. Заметок: ${noteCount}. XP в копии: ${imported.xp}.`;
   $("#import-preview").hidden = false;
   setTransferStatus("Копия проверена. Подтвердите объединение прогресса.", "success");
   if (!$("#transfer-dialog").open) $("#transfer-dialog").showModal();
@@ -890,6 +1126,13 @@ function applyProgressMerge(imported) {
   state.notes = { ...state.notes, ...imported.notes };
   state.xp = Math.max(state.xp || 0, imported.xp || 0);
   state.quizBest = state.quizBest === null ? imported.quizBest : imported.quizBest === null ? state.quizBest : Math.max(state.quizBest, imported.quizBest);
+  const mergeUnique = (current, incoming) => [...new Set([...(current || []), ...(incoming || [])])].sort();
+  state.pd96.completedModules = [...new Set([...state.pd96.completedModules, ...imported.pd96.completedModules])].sort((a, b) => a - b);
+  state.pd96.completedPractices = mergeUnique(state.pd96.completedPractices, imported.pd96.completedPractices);
+  state.pd96.confidentQuestions = mergeUnique(state.pd96.confidentQuestions, imported.pd96.confidentQuestions);
+  const confidentQuestions = new Set(state.pd96.confidentQuestions);
+  state.pd96.reviewQuestions = mergeUnique(state.pd96.reviewQuestions, imported.pd96.reviewQuestions)
+    .filter((key) => !confidentQuestions.has(key));
   if (importedIsNewer) {
     state.streak = imported.streak || 0;
     state.lastStudyDate = imported.lastStudyDate;
@@ -1037,7 +1280,7 @@ function registerWebMcpTools() {
     {
       name: "get_learning_progress",
       title: "Показать учебный прогресс",
-      description: "Возвращает количество пройденных уроков, опыт, серию и следующий доступный урок.",
+      description: "Возвращает прогресс базового маршрута и трека PD96, опыт, серию и следующие доступные занятия.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       annotations: { readOnlyHint: true, untrustedContentHint: false },
       execute: () => ({
@@ -1047,6 +1290,11 @@ function registerWebMcpTools() {
         xp: state.xp || 0,
         streak: state.streak || 0,
         nextTopic: nextTopic() ? { id: nextTopic().id, title: nextTopic().title } : null,
+        pd96: {
+          completedModules: state.pd96.completedModules.length,
+          totalModules: pd96Course.modules.length,
+          nextModule: nextPd96Module() ? { id: nextPd96Module().id, title: nextPd96Module().title } : null
+        },
         quizBest: state.quizBest
       })
     },
@@ -1106,7 +1354,7 @@ renderSimulator();
 registerWebMcpTools();
 const initialView = location.hash.slice(1);
 const incomingSyncCode = initialView.startsWith("sync=") ? initialView : null;
-showView(["overview", "topics", "glossary", "simulator", "quiz"].includes(initialView) ? initialView : "overview", false);
+showView(["overview", "topics", "pd96", "glossary", "simulator", "quiz"].includes(initialView) ? initialView : "overview", false);
 if (incomingSyncCode) {
   try {
     prepareProgressImport(decodeProgressCode(incomingSyncCode), "QR-ссылке");

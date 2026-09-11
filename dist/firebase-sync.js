@@ -62,6 +62,21 @@ function setSyncButtonBusy(isBusy) {
   syncButton.textContent = isBusy ? "Синхронизация…" : "Синхронизировать сейчас";
 }
 
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === "object") {
+    return Object.keys(value).sort().reduce((result, key) => {
+      if (value[key] !== undefined) result[key] = stableValue(value[key]);
+      return result;
+    }, {});
+  }
+  return value;
+}
+
+function progressFingerprint(value) {
+  return JSON.stringify(stableValue(value));
+}
+
 function syncedAtMessage() {
   const time = new Intl.DateTimeFormat("ru-RU", {
     hour: "2-digit",
@@ -91,14 +106,15 @@ function friendlyError(error) {
   return "Не удалось синхронизировать. Локальный прогресс сохранён.";
 }
 
-async function writeCurrentState(user = currentUser) {
+async function writeCurrentState(user = currentUser, { manual = false } = {}) {
   if (!user || syncing) {
     if (user) queuedSync = true;
     return;
   }
   const startedAt = Date.now();
   syncing = true;
-  setSyncButtonBusy(true);
+  if (manual) setSyncButtonBusy(true);
+  else syncButton.disabled = true;
   setCloudStatus("Синхронизация…", "loading");
   try {
     const reference = cloudDocument(user);
@@ -118,12 +134,13 @@ async function writeCurrentState(user = currentUser) {
     applyingCloudState = false;
     setCloudStatus(friendlyError(error), "error");
   } finally {
-    const remainingFeedbackTime = MIN_SYNC_FEEDBACK_MS - (Date.now() - startedAt);
-    if (remainingFeedbackTime > 0) {
+    const remainingFeedbackTime = manual ? MIN_SYNC_FEEDBACK_MS - (Date.now() - startedAt) : 0;
+    if (manual && remainingFeedbackTime > 0) {
       await new Promise((resolve) => setTimeout(resolve, remainingFeedbackTime));
     }
     syncing = false;
-    setSyncButtonBusy(false);
+    if (manual) setSyncButtonBusy(false);
+    else syncButton.disabled = false;
     if (queuedSync) {
       queuedSync = false;
       scheduleSync(250);
@@ -142,11 +159,16 @@ function watchCloud(user) {
   stopWatching = onSnapshot(cloudDocument(user), (snapshot) => {
     if (!snapshot.exists() || snapshot.metadata.hasPendingWrites || !snapshot.data()?.state) return;
     const remoteState = snapshot.data().state;
+    if (progressFingerprint(learning.getState()) === progressFingerprint(remoteState)) return;
     applyingCloudState = true;
-    const mergedState = learning.mergeCloudProgress(remoteState);
-    applyingCloudState = false;
+    let mergedState;
+    try {
+      mergedState = learning.mergeCloudProgress(remoteState);
+    } finally {
+      applyingCloudState = false;
+    }
     setCloudStatus("Получены свежие данные из Firebase.", "success");
-    if (JSON.stringify(mergedState) !== JSON.stringify(remoteState)) scheduleSync(250);
+    if (progressFingerprint(mergedState) !== progressFingerprint(remoteState)) scheduleSync(250);
   }, (error) => setCloudStatus(friendlyError(error), "error"));
 }
 
@@ -173,7 +195,7 @@ signOutButton.addEventListener("click", async () => {
   }
 });
 
-syncButton.addEventListener("click", () => writeCurrentState());
+syncButton.addEventListener("click", () => writeCurrentState(currentUser, { manual: true }));
 window.addEventListener("ceh-znaniy:state-change", () => scheduleSync());
 window.addEventListener("online", () => scheduleSync(100));
 
@@ -188,8 +210,8 @@ try {
       setCloudStatus("Войдите через Google, чтобы связать телефон и компьютер.");
       return;
     }
-    watchCloud(user);
     await writeCurrentState(user);
+    watchCloud(user);
   });
 } catch (error) {
   setCloudStatus(friendlyError(error), "error");

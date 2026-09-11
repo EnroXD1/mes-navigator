@@ -20,13 +20,14 @@
           <span class="brand-mark" aria-hidden="true">ЦЗ</span>
           <span>
             <strong>Цех знаний</strong>
-            <small>MES / MOM navigator · v0.5.1</small>
+            <small>MES / MOM navigator · v0.6.0</small>
           </span>
         </button>
 
         <nav class="primary-nav" aria-label="Разделы приложения">
           <button class="nav-button active" data-view="overview">Учиться</button>
           <button class="nav-button" data-view="topics">100 тем</button>
+          <button class="nav-button" data-view="pd96">PD96</button>
           <button class="nav-button" data-view="glossary">Словарь</button>
           <button class="nav-button" data-view="simulator">Симулятор</button>
           <button class="nav-button" data-view="quiz">Экзамен</button>
@@ -102,6 +103,19 @@
               <div class="lesson-path" id="lesson-path"></div>
             </div>
           </section>
+
+          <section class="pd96-promo panel" aria-labelledby="pd96-promo-title">
+            <div>
+              <p class="eyebrow">Проектный трек · 25 модулей</p>
+              <h2 id="pd96-promo-title">ProductionDatabase 96 + ProductionPlanner</h2>
+              <p>Инженерная подготовка по архитектуре, данным, производственному контуру и планированию. Материал подаётся по одному модулю и одному вопросу, без длинных стен текста.</p>
+            </div>
+            <div class="pd96-promo-progress">
+              <strong id="pd96-overview-progress">0/25</strong>
+              <span>модулей завершено</span>
+              <button class="button primary" data-view="pd96">Открыть трек</button>
+            </div>
+          </section>
         </section>
 
         <section class="view" id="topics-view">
@@ -152,6 +166,23 @@
             <strong>Такой аббревиатуры пока нет</strong>
             <span>Попробуй полную форму, русский смысл или назначение.</span>
           </div>
+        </section>
+
+        <section class="view" id="pd96-view">
+          <div class="workspace-header pd96-header">
+            <div>
+              <p class="eyebrow">Последовательный проектный трек</p>
+              <h1>PD96 + Planner</h1>
+              <p class="workspace-intro">25 модулей, 250 базовых и 200 углублённых вопросов. Для завершения модуля нужна одна мини-практика и три уверенных ответа.</p>
+            </div>
+            <div class="pd96-total-progress panel">
+              <span id="pd96-progress-label">0 из 25 модулей</span>
+              <strong id="pd96-progress-percent">0%</strong>
+              <div class="progress-track"><i id="pd96-progress-bar"></i></div>
+            </div>
+          </div>
+          <div class="pd96-stage-filter" id="pd96-stage-filter" aria-label="Этапы подготовки"></div>
+          <div class="pd96-module-list" id="pd96-module-list"></div>
         </section>
 
         <section class="view" id="simulator-view">
@@ -261,6 +292,36 @@
       </div>
     </dialog>
 
+    <dialog class="topic-dialog pd96-dialog" id="pd96-dialog">
+      <div class="dialog-head">
+        <div><span id="pd96-dialog-level" class="topic-module-label"></span><h2 id="pd96-dialog-title"></h2></div>
+        <button class="dialog-close" id="pd96-dialog-close" aria-label="Закрыть модуль">×</button>
+      </div>
+      <div class="dialog-content">
+        <section class="pd96-goal"><h3>Цель модуля</h3><p id="pd96-dialog-goal"></p></section>
+        <section class="distinction-section" id="pd96-legal-note" hidden><h3>Для правовых и режимных решений</h3><p>Это учебная карта. Перед применением проверяйте действующую редакцию актов и локальные правила предприятия с юристами и ИБ.</p></section>
+        <section><h3>Что нужно понять</h3><ul id="pd96-dialog-concepts" class="detail-points"></ul></section>
+        <section>
+          <div class="pd96-section-head"><div><h3>Мини-практика</h3><p>Выполни хотя бы одно задание.</p></div><span id="pd96-practice-status"></span></div>
+          <div class="pd96-practice-list" id="pd96-practice-list"></div>
+        </section>
+        <section class="pd96-question-panel">
+          <div class="pd96-section-head"><div><h3>Самопроверка</h3><p id="pd96-question-progress"></p></div><span id="pd96-question-source"></span></div>
+          <p class="pd96-question" id="pd96-question-text"></p>
+          <div class="pd96-answer-actions">
+            <button class="button secondary" id="pd96-review-question">Нужно повторить</button>
+            <button class="button primary" id="pd96-master-question">Ответил уверенно</button>
+            <button class="text-button" id="pd96-next-question">Следующий вопрос →</button>
+          </div>
+        </section>
+        <section><h3>Связанные базовые темы</h3><div id="pd96-related-topics" class="related-topics"></div></section>
+      </div>
+      <div class="dialog-actions pd96-dialog-actions">
+        <span id="pd96-completion-hint">Для завершения: практика и 3 уверенных ответа</span>
+        <button class="button primary" id="pd96-complete-module" disabled>Завершить модуль</button>
+      </div>
+    </dialog>
+
     <dialog class="lesson-dialog" id="lesson-dialog">
       <div class="lesson-head">
         <div>
@@ -284,7 +345,7 @@
         <ol class="offline-steps">
           <li><b>Откройте приложение в Chrome.</b><span>Перейдите на опубликованный адрес при подключённом интернете и дождитесь полной загрузки главного экрана.</span></li>
           <li><b>Установите на телефон.</b><span>Нажмите кнопку ниже. Если окно не появилось, откройте меню Chrome ⋮ и выберите «Установить приложение» или «Добавить на главный экран».</span></li>
-          <li><b>Один раз запустите значок онлайн.</b><span>Это сохранит текущую версию: все 100 тем, стили, экзамен и симулятор.</span></li>
+          <li><b>Один раз запустите значок онлайн.</b><span>Это сохранит текущую версию: 100 базовых тем, весь трек PD96, экзамен и симулятор.</span></li>
           <li><b>Занимайтесь офлайн.</b><span>Открывайте «Цех знаний» с главного экрана без сети. Прогресс сохранится локально, а после входа в Firebase отправится в облако при восстановлении соединения.</span></li>
           <li><b>Получайте обновления.</b><span>Периодически запускайте приложение с интернетом и обновляйте страницу. Новая версия заменит старый офлайн-кэш.</span></li>
         </ol>
@@ -330,7 +391,7 @@
           </div>
         </section>
         <section class="transfer-option">
-          <div><span class="transfer-icon" aria-hidden="true">▦</span><div><h3>Быстрый перенос по QR</h3><p>QR-ссылка переносит выполненные темы, XP, серию и результат экзамена. Заметки передаются только через файл.</p></div></div>
+          <div><span class="transfer-icon" aria-hidden="true">▦</span><div><h3>Быстрый перенос по QR</h3><p>QR-ссылка переносит выполненные темы, модули PD96, XP, серию и результат экзамена. Заметки передаются только через файл.</p></div></div>
           <button class="button primary" id="create-progress-qr">Создать QR-код</button>
           <div class="qr-transfer" id="qr-transfer" hidden>
             <div class="qr-canvas" id="progress-qr" aria-label="QR-код переноса прогресса"></div>
@@ -359,6 +420,7 @@
     <script src="topic-details.js"></script>
     <script src="topic-diagrams.js"></script>
     <script src="abbreviations.js"></script>
+    <script src="pd96-course-data.js"></script>
     <script src="qrcode.min.js"></script>
     <script src="app.js"></script>
     <script type="module" src="firebase-sync.js"></script>
