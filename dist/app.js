@@ -161,10 +161,16 @@ let selectedModule = "all";
 let activeTopicId = 1;
 let quiz = null;
 let lesson = null;
+let pendingProgressImport = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
-const saveState = () => localStorage.setItem("ceh-znaniy-state", JSON.stringify(state));
+const saveState = () => {
+  localStorage.setItem("ceh-znaniy-state", JSON.stringify(state));
+  if (typeof window.dispatchEvent === "function" && typeof CustomEvent !== "undefined") {
+    window.dispatchEvent(new CustomEvent("ceh-znaniy:state-change", { detail: { state: structuredClone(state) } }));
+  }
+};
 const topicById = (id) => topics.find((topic) => topic.id === Number(id));
 const nextTopic = () => topics.find((topic) => !state.studied.includes(topic.id)) || null;
 const isTopicUnlocked = (topic) => state.studied.includes(topic.id) || topic.id === nextTopic()?.id;
@@ -768,6 +774,177 @@ function updateOfflineStatus(message, stateName = "ready") {
   status.dataset.state = stateName;
 }
 
+const PROGRESS_TRANSFER_FORMAT = "ceh-znaniy-progress";
+
+function setTransferStatus(message, stateName = "ready") {
+  const status = $("#transfer-status");
+  status.textContent = message;
+  status.dataset.state = stateName;
+}
+
+function openTransferDialog() {
+  setTransferStatus("Выберите способ переноса между устройствами.");
+  if (!$("#transfer-dialog").open) $("#transfer-dialog").showModal();
+}
+
+function exportedProgress() {
+  return {
+    format: PROGRESS_TRANSFER_FORMAT,
+    version: 1,
+    appVersion: "0.5.0",
+    exportedAt: new Date().toISOString(),
+    state: structuredClone(state)
+  };
+}
+
+function downloadProgress() {
+  const content = JSON.stringify(exportedProgress(), null, 2);
+  const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `ceh-znaniy-progress-${localDateKey()}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+  setTransferStatus("Резервная копия скачана. Сохраните файл до импорта на другом устройстве.", "success");
+}
+
+function compactProgress() {
+  return {
+    v: 1,
+    s: [...state.studied],
+    x: state.xp || 0,
+    q: state.quizBest,
+    r: state.streak || 0,
+    d: state.lastStudyDate
+  };
+}
+
+function encodeProgressCode(progress = compactProgress()) {
+  const bytes = new TextEncoder().encode(JSON.stringify(progress));
+  let binary = "";
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decodeProgressCode(input) {
+  const trimmed = String(input || "").trim();
+  const encoded = trimmed.includes("#sync=") ? trimmed.split("#sync=")[1].split(/[&#]/)[0] : trimmed.replace(/^sync=/, "");
+  if (!encoded) throw new Error("Код переноса пуст.");
+  const padded = encoded.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - encoded.length % 4) % 4);
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  const compact = JSON.parse(new TextDecoder().decode(bytes));
+  if (compact.v !== 1 || !Array.isArray(compact.s)) throw new Error("Неизвестный формат QR-кода.");
+  return { studied: compact.s, xp: compact.x, quizBest: compact.q, streak: compact.r, lastStudyDate: compact.d };
+}
+
+function sanitizeProgress(raw) {
+  const candidate = raw?.format === PROGRESS_TRANSFER_FORMAT ? raw.state : raw;
+  if (!candidate || !Array.isArray(candidate.studied)) throw new Error("В файле нет корректного прогресса «Цеха знаний».");
+  const studied = [...new Set(candidate.studied.map(Number).filter((id) => Number.isInteger(id) && id >= 1 && id <= topics.length))].sort((a, b) => a - b);
+  const notes = {};
+  if (candidate.notes && typeof candidate.notes === "object") {
+    Object.entries(candidate.notes).forEach(([topicId, note]) => {
+      const id = Number(topicId);
+      if (Number.isInteger(id) && id >= 1 && id <= topics.length && typeof note === "string") notes[id] = note.slice(0, 20000);
+    });
+  }
+  const numberOrZero = (value) => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
+  const quizBest = candidate.quizBest === null || candidate.quizBest === undefined ? null : Math.min(10, numberOrZero(candidate.quizBest));
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(candidate.lastStudyDate || "") ? candidate.lastStudyDate : null;
+  const imported = {
+    studied,
+    notes,
+    xp: numberOrZero(candidate.xp),
+    streak: numberOrZero(candidate.streak),
+    quizBest,
+    lastStudyDate: date
+  };
+  if (candidate.simulator && typeof candidate.simulator === "object") {
+    imported.simulator = {
+      index: Math.min(simStages.length - 1, numberOrZero(candidate.simulator.index)),
+      defect: Boolean(candidate.simulator.defect),
+      log: Array.isArray(candidate.simulator.log) ? candidate.simulator.log.filter((entry) => typeof entry === "string").slice(-100) : []
+    };
+  }
+  return imported;
+}
+
+function prepareProgressImport(raw, label = "резервной копии") {
+  const imported = sanitizeProgress(raw);
+  const newTopics = imported.studied.filter((id) => !state.studied.includes(id)).length;
+  const noteCount = Object.keys(imported.notes).length;
+  pendingProgressImport = imported;
+  $("#import-preview-title").textContent = `${imported.studied.length} ${wordForTopics(imported.studied.length)} в ${label}`;
+  $("#import-preview-copy").textContent = `Будет добавлено новых тем: ${newTopics}. Заметок в копии: ${noteCount}. XP в копии: ${imported.xp}.`;
+  $("#import-preview").hidden = false;
+  setTransferStatus("Копия проверена. Подтвердите объединение прогресса.", "success");
+  if (!$("#transfer-dialog").open) $("#transfer-dialog").showModal();
+}
+
+function applyProgressMerge(imported) {
+  const importedIsNewer = (imported.lastStudyDate || "") >= (state.lastStudyDate || "");
+  state.studied = [...new Set([...state.studied, ...imported.studied])].sort((a, b) => a - b);
+  state.notes = { ...state.notes, ...imported.notes };
+  state.xp = Math.max(state.xp || 0, imported.xp || 0);
+  state.quizBest = state.quizBest === null ? imported.quizBest : imported.quizBest === null ? state.quizBest : Math.max(state.quizBest, imported.quizBest);
+  if (importedIsNewer) {
+    state.streak = imported.streak || 0;
+    state.lastStudyDate = imported.lastStudyDate;
+  }
+  if (imported.simulator && imported.simulator.index >= state.simulator.index) {
+    state.simulator = {
+      ...state.simulator,
+      ...imported.simulator,
+      log: [...new Set([...state.simulator.log, ...imported.simulator.log])].slice(-100)
+    };
+  }
+  saveState();
+  renderAll();
+  renderSimulator();
+  return structuredClone(state);
+}
+
+function mergeProgressImport() {
+  if (!pendingProgressImport) return;
+  const imported = pendingProgressImport;
+  pendingProgressImport = null;
+  $("#import-preview").hidden = true;
+  applyProgressMerge(imported);
+  setTransferStatus("Прогресс объединён и сохранён на этом устройстве.", "success");
+  history.replaceState(null, "", "#overview");
+}
+
+function createProgressQr() {
+  const code = encodeProgressCode();
+  const transferUrl = `${location.origin}${location.pathname}#sync=${code}`;
+  $("#progress-link").value = transferUrl;
+  $("#progress-qr").innerHTML = "";
+  $("#qr-transfer").hidden = false;
+  if (typeof QRCode === "undefined") {
+    setTransferStatus("Не удалось загрузить генератор QR. Скопируйте ссылку вручную.", "error");
+    return;
+  }
+  new QRCode($("#progress-qr"), {
+    text: transferUrl,
+    width: 160,
+    height: 160,
+    colorDark: "#071019",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.M
+  });
+  setTransferStatus("QR-код готов. Откройте камеру второго устройства и наведите её на код.", "success");
+}
+
+async function importProgressFile(file) {
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) throw new Error("Файл слишком большой. Максимальный размер — 2 МБ.");
+  const parsed = JSON.parse(await file.text());
+  prepareProgressImport(parsed, "файле");
+}
+
 function openOfflineGuide() {
   if (window.matchMedia("(display-mode: standalone)").matches) {
     updateOfflineStatus("Приложение уже установлено. После первого полного открытия материалы доступны без сети.");
@@ -797,6 +974,42 @@ $("#install-from-guide").addEventListener("click", async () => {
   } else {
     updateOfflineStatus("Если системное окно не появилось, откройте меню ⋮ в Chrome и выберите «Установить приложение» или «Добавить на главный экран».");
   }
+});
+$("#transfer-progress").addEventListener("click", openTransferDialog);
+$("#transfer-close").addEventListener("click", () => $("#transfer-dialog").close());
+$("#export-progress").addEventListener("click", downloadProgress);
+$("#select-progress-file").addEventListener("click", () => $("#progress-file").click());
+$("#progress-file").addEventListener("change", async (event) => {
+  try {
+    await importProgressFile(event.target.files?.[0]);
+  } catch (error) {
+    setTransferStatus(error instanceof SyntaxError ? "Файл повреждён или не является JSON-копией." : error.message, "error");
+  } finally {
+    event.target.value = "";
+  }
+});
+$("#create-progress-qr").addEventListener("click", createProgressQr);
+$("#copy-progress-link").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText($("#progress-link").value);
+    setTransferStatus("Ссылка скопирована. Отправьте или откройте её на втором устройстве.", "success");
+  } catch {
+    setTransferStatus("Не удалось скопировать автоматически. Выделите ссылку вручную.", "error");
+  }
+});
+$("#read-progress-code").addEventListener("click", () => {
+  try {
+    prepareProgressImport(decodeProgressCode($("#progress-code").value), "коде переноса");
+  } catch (error) {
+    setTransferStatus(error.message || "Код переноса не распознан.", "error");
+  }
+});
+$("#confirm-progress-import").addEventListener("click", mergeProgressImport);
+$("#cancel-progress-import").addEventListener("click", () => {
+  pendingProgressImport = null;
+  $("#import-preview").hidden = true;
+  setTransferStatus("Импорт отменён. Локальный прогресс не изменён.");
+  history.replaceState(null, "", "#overview");
 });
 
 if ("serviceWorker" in navigator) {
@@ -879,8 +1092,23 @@ function registerWebMcpTools() {
   tools.forEach((tool) => { try { context.registerTool(tool); } catch {} });
 }
 
+window.CehZnaniy = Object.freeze({
+  getState: () => structuredClone(state),
+  mergeCloudProgress: (raw) => applyProgressMerge(sanitizeProgress(raw))
+});
+
 renderAll();
 renderSimulator();
 registerWebMcpTools();
 const initialView = location.hash.slice(1);
+const incomingSyncCode = initialView.startsWith("sync=") ? initialView : null;
 showView(["overview", "topics", "glossary", "simulator", "quiz"].includes(initialView) ? initialView : "overview", false);
+if (incomingSyncCode) {
+  try {
+    prepareProgressImport(decodeProgressCode(incomingSyncCode), "QR-ссылке");
+  } catch (error) {
+    openTransferDialog();
+    setTransferStatus(error.message || "QR-ссылка не распознана.", "error");
+  }
+  history.replaceState(null, "", "#overview");
+}

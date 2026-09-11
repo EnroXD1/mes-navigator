@@ -20,7 +20,7 @@
           <span class="brand-mark" aria-hidden="true">ЦЗ</span>
           <span>
             <strong>Цех знаний</strong>
-            <small>MES / MOM navigator · v0.4.0</small>
+            <small>MES / MOM navigator · v0.5.0</small>
           </span>
         </button>
 
@@ -49,6 +49,7 @@
                 <button class="button primary" id="continue-button">Начать урок</button>
                 <button class="button secondary" data-view="simulator">Открыть симулятор</button>
                 <button class="button secondary" id="install-app">Установка и офлайн</button>
+                <button class="button secondary" id="transfer-progress">Синхронизация</button>
               </div>
               <dl class="quick-stats">
                 <div><dt id="studied-count">0</dt><dd>тем изучено</dd></div>
@@ -284,11 +285,11 @@
           <li><b>Откройте приложение в Chrome.</b><span>Перейдите на опубликованный адрес при подключённом интернете и дождитесь полной загрузки главного экрана.</span></li>
           <li><b>Установите на телефон.</b><span>Нажмите кнопку ниже. Если окно не появилось, откройте меню Chrome ⋮ и выберите «Установить приложение» или «Добавить на главный экран».</span></li>
           <li><b>Один раз запустите значок онлайн.</b><span>Это сохранит текущую версию: все 100 тем, стили, экзамен и симулятор.</span></li>
-          <li><b>Занимайтесь офлайн.</b><span>Открывайте «Цех знаний» с главного экрана без сети. Прогресс и заметки хранятся только на этом устройстве.</span></li>
+          <li><b>Занимайтесь офлайн.</b><span>Открывайте «Цех знаний» с главного экрана без сети. Прогресс сохранится локально, а после входа в Firebase отправится в облако при восстановлении соединения.</span></li>
           <li><b>Получайте обновления.</b><span>Периодически запускайте приложение с интернетом и обновляйте страницу. Новая версия заменит старый офлайн-кэш.</span></li>
         </ol>
         <div class="offline-notes">
-          <p><b>Важно:</b> не очищайте данные Chrome для этого сайта — вместе с ними удалятся локальный прогресс, заметки и офлайн-файлы.</p>
+          <p><b>Важно:</b> не очищайте данные Chrome для этого сайта до первой успешной синхронизации или создания резервной копии.</p>
           <p>Внешние ссылки без интернета не откроются, но учебные материалы и функции приложения останутся доступны.</p>
         </div>
       </div>
@@ -297,9 +298,69 @@
       </div>
     </dialog>
 
+    <dialog class="topic-dialog transfer-dialog" id="transfer-dialog">
+      <div class="dialog-head">
+        <div><span class="topic-module-label">Облако и резервная копия</span><h2>Синхронизация прогресса</h2></div>
+        <button class="dialog-close" id="transfer-close" aria-label="Закрыть перенос прогресса">×</button>
+      </div>
+      <div class="dialog-content">
+        <div class="transfer-status" id="transfer-status" data-state="ready">Выберите способ синхронизации между устройствами.</div>
+        <section class="transfer-option cloud-option">
+          <div><span class="transfer-icon" aria-hidden="true">☁</span><div><h3>Firebase — автоматическая синхронизация</h3><p>Войдите в один Google-аккаунт на телефоне и компьютере. Приложение объединит прогресс и продолжит сохранять изменения автоматически.</p></div></div>
+          <div class="cloud-status" id="cloud-status" data-state="loading" role="status">Подключение к Firebase…</div>
+          <div class="cloud-account" id="cloud-signed-out">
+            <button class="button primary" id="cloud-sign-in">Войти через Google</button>
+            <small>Без входа прогресс по-прежнему хранится только на этом устройстве.</small>
+          </div>
+          <div class="cloud-account" id="cloud-signed-in" hidden>
+            <div><span>Подключён аккаунт</span><strong id="cloud-user"></strong></div>
+            <div class="transfer-actions">
+              <button class="button primary" id="cloud-sync-now">Синхронизировать сейчас</button>
+              <button class="button secondary" id="cloud-sign-out">Выйти</button>
+            </div>
+          </div>
+          <p class="cloud-help">При конфликте пройденные темы объединяются, а лучший XP и результат экзамена сохраняются. Офлайн-изменения отправятся после восстановления интернета.</p>
+        </section>
+        <section class="transfer-option">
+          <div><span class="transfer-icon" aria-hidden="true">⇩</span><div><h3>Полная резервная копия</h3><p>JSON-файл сохраняет уроки, XP, экзамены, заметки и состояние симулятора.</p></div></div>
+          <div class="transfer-actions">
+            <button class="button primary" id="export-progress">Скачать копию</button>
+            <button class="button secondary" id="select-progress-file">Импортировать файл</button>
+            <input id="progress-file" type="file" accept="application/json,.json" hidden />
+          </div>
+        </section>
+        <section class="transfer-option">
+          <div><span class="transfer-icon" aria-hidden="true">▦</span><div><h3>Быстрый перенос по QR</h3><p>QR-ссылка переносит выполненные темы, XP, серию и результат экзамена. Заметки передаются только через файл.</p></div></div>
+          <button class="button primary" id="create-progress-qr">Создать QR-код</button>
+          <div class="qr-transfer" id="qr-transfer" hidden>
+            <div class="qr-canvas" id="progress-qr" aria-label="QR-код переноса прогресса"></div>
+            <label>Ссылка для переноса<textarea id="progress-link" rows="3" readonly></textarea></label>
+            <button class="button secondary" id="copy-progress-link">Копировать ссылку</button>
+          </div>
+          <details class="transfer-paste">
+            <summary>Вставить ссылку или код вручную</summary>
+            <label>Код переноса<textarea id="progress-code" rows="3" placeholder="Вставьте ссылку из другого устройства"></textarea></label>
+            <button class="button secondary" id="read-progress-code">Проверить код</button>
+          </details>
+        </section>
+        <section class="import-preview" id="import-preview" hidden>
+          <span>Найдена резервная копия</span>
+          <h3 id="import-preview-title"></h3>
+          <p id="import-preview-copy"></p>
+          <div class="transfer-actions">
+            <button class="button primary" id="confirm-progress-import">Объединить прогресс</button>
+            <button class="button secondary" id="cancel-progress-import">Отмена</button>
+          </div>
+          <small>Импорт не удаляет уже пройденные темы. Для совпадающих заметок используется текст из выбранного файла.</small>
+        </section>
+      </div>
+    </dialog>
+
     <script src="topic-details.js"></script>
     <script src="topic-diagrams.js"></script>
     <script src="abbreviations.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@04f46c6a0708418cb7b96fc563eacae0fbf77674/qrcode.min.js" crossorigin="anonymous"></script>
     <script src="app.js"></script>
+    <script type="module" src="firebase-sync.js"></script>
   </body>
 </html>
