@@ -48,10 +48,27 @@ let saveTimer = null;
 let syncing = false;
 let queuedSync = false;
 let applyingCloudState = false;
+const MIN_SYNC_FEEDBACK_MS = 900;
 
 function setCloudStatus(message, stateName = "ready") {
   status.textContent = message;
   status.dataset.state = stateName;
+}
+
+function setSyncButtonBusy(isBusy) {
+  syncButton.disabled = isBusy;
+  syncButton.dataset.syncing = String(isBusy);
+  syncButton.setAttribute("aria-busy", String(isBusy));
+  syncButton.textContent = isBusy ? "Синхронизация…" : "Синхронизировать сейчас";
+}
+
+function syncedAtMessage() {
+  const time = new Intl.DateTimeFormat("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  }).format(new Date());
+  return `Готово — прогресс синхронизирован в ${time}.`;
 }
 
 function cloudDocument(user = currentUser) {
@@ -79,8 +96,9 @@ async function writeCurrentState(user = currentUser) {
     if (user) queuedSync = true;
     return;
   }
+  const startedAt = Date.now();
   syncing = true;
-  syncButton.disabled = true;
+  setSyncButtonBusy(true);
   setCloudStatus("Синхронизация…", "loading");
   try {
     const reference = cloudDocument(user);
@@ -95,13 +113,17 @@ async function writeCurrentState(user = currentUser) {
       state: learning.getState(),
       updatedAt: serverTimestamp()
     }, { merge: true });
-    setCloudStatus("Прогресс синхронизирован с Firebase.", "success");
+    setCloudStatus(syncedAtMessage(), "success");
   } catch (error) {
     applyingCloudState = false;
     setCloudStatus(friendlyError(error), "error");
   } finally {
+    const remainingFeedbackTime = MIN_SYNC_FEEDBACK_MS - (Date.now() - startedAt);
+    if (remainingFeedbackTime > 0) {
+      await new Promise((resolve) => setTimeout(resolve, remainingFeedbackTime));
+    }
     syncing = false;
-    syncButton.disabled = false;
+    setSyncButtonBusy(false);
     if (queuedSync) {
       queuedSync = false;
       scheduleSync(250);

@@ -401,6 +401,9 @@ h3 { font-size: 1rem; }
 .cloud-account span, .cloud-account small, .cloud-help { color: var(--muted); font-size: 0.82rem; line-height: 1.45; }
 .cloud-account strong { color: var(--text); overflow-wrap: anywhere; }
 .cloud-help { margin: -3px 0 0 !important; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+#cloud-sync-now[data-syncing="true"] { display: inline-flex; align-items: center; justify-content: center; gap: 9px; cursor: progress; opacity: 0.8; }
+#cloud-sync-now[data-syncing="true"]::before { width: 14px; height: 14px; border: 2px solid rgba(16,32,8,0.35); border-top-color: #102008; border-radius: 50%; content: ""; animation: sync-spin 700ms linear infinite; }
+@keyframes sync-spin { to { transform: rotate(360deg); } }
 .transfer-option > div:first-child { display: flex; align-items: flex-start; gap: 14px; }
 .transfer-option h3 { margin: 0 0 5px !important; }
 .transfer-option p { color: var(--muted) !important; }

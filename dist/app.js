@@ -791,7 +791,7 @@ function exportedProgress() {
   return {
     format: PROGRESS_TRANSFER_FORMAT,
     version: 1,
-    appVersion: "0.5.0",
+    appVersion: "0.5.1",
     exportedAt: new Date().toISOString(),
     state: structuredClone(state)
   };
@@ -927,15 +927,19 @@ function createProgressQr() {
     setTransferStatus("Не удалось загрузить генератор QR. Скопируйте ссылку вручную.", "error");
     return;
   }
-  new QRCode($("#progress-qr"), {
-    text: transferUrl,
-    width: 160,
-    height: 160,
-    colorDark: "#071019",
-    colorLight: "#ffffff",
-    correctLevel: QRCode.CorrectLevel.M
-  });
-  setTransferStatus("QR-код готов. Откройте камеру второго устройства и наведите её на код.", "success");
+  try {
+    new QRCode($("#progress-qr"), {
+      text: transferUrl,
+      width: 160,
+      height: 160,
+      colorDark: "#071019",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.M
+    });
+    setTransferStatus("QR-код готов. Откройте камеру второго устройства и наведите её на код.", "success");
+  } catch {
+    setTransferStatus("QR-код не поместил текущий прогресс. Используйте ссылку или JSON-файл.", "error");
+  }
 }
 
 async function importProgressFile(file) {
