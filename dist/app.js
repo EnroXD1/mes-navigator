@@ -292,7 +292,7 @@ function renderPd96() {
     const icon = progress.completed ? "✓" : unlocked ? "▶" : "🔒";
     return `<button class="pd96-module-card ${stateClass}" data-pd96-module="${module.id}" ${unlocked ? "" : "disabled"}>
       <span class="pd96-card-number">${icon}<b>${String(module.id).padStart(2, "0")}</b></span>
-      <span class="pd96-card-copy"><small>${escapeHtml(module.level)}</small><strong>${escapeHtml(module.title)}</strong><em>${pd96CountLabel(progress.confident, ["уверенный ответ", "уверенных ответа", "уверенных ответов"])} · ${pd96CountLabel(progress.practices, ["практика", "практики", "практик"])}</em></span>
+      <span class="pd96-card-copy"><small>${escapeHtml(module.level.replace("->", "→"))}</small><strong>${escapeHtml(module.title)}</strong><em>${pd96CountLabel(progress.confident, ["уверенный ответ", "уверенных ответа", "уверенных ответов"])} · ${pd96CountLabel(progress.practices, ["практика", "практики", "практик"])}</em></span>
       <span class="pd96-card-state">${stateLabel}</span>
     </button>`;
   }).join("");
@@ -317,7 +317,7 @@ function renderPd96Dialog() {
   activePd96QuestionIndex = Math.min(activePd96QuestionIndex, questions.length - 1);
   const question = questions[activePd96QuestionIndex];
   const progress = pd96ModuleProgress(module);
-  $("#pd96-dialog-level").textContent = `Модуль ${module.id} из 25 · ${module.level}`;
+  $("#pd96-dialog-level").textContent = `Модуль ${module.id} из 25 · ${module.level.replace("->", "→")}`;
   $("#pd96-dialog-title").textContent = module.title;
   $("#pd96-dialog-goal").textContent = module.goal;
   $("#pd96-legal-note").hidden = module.id < 21;
@@ -989,7 +989,7 @@ function exportedProgress() {
   return {
     format: PROGRESS_TRANSFER_FORMAT,
     version: 1,
-    appVersion: "0.6.0",
+    appVersion: "0.6.1",
     exportedAt: new Date().toISOString(),
     state: structuredClone(state)
   };
@@ -1260,9 +1260,15 @@ $("#cancel-progress-import").addEventListener("click", () => {
 });
 
 if ("serviceWorker" in navigator) {
+  let reloadingForServiceWorker = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloadingForServiceWorker) return;
+    reloadingForServiceWorker = true;
+    window.location.reload();
+  });
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("./service-worker.js");
+      await navigator.serviceWorker.register("./service-worker.js?v=0.6.1");
       await navigator.serviceWorker.ready;
       updateOfflineStatus("Офлайн-кэш готов. Можно устанавливать приложение и отключать интернет.");
     } catch {

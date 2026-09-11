@@ -3,6 +3,13 @@
 Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 нумерация версий следует [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [0.6.1] — 2026-09-11
+
+### Исправлено
+
+- Файлы интерфейса получили версионные URL, поэтому новый HTML больше не смешивается со старым JavaScript из PWA-кэша.
+- После активации нового service worker страница один раз перезагружается и сразу использует согласованную версию приложения.
+
 ## [0.6.0] — 2026-09-11
 
 ### Добавлено
@@ -115,6 +122,7 @@
 - `MINOR` — новые учебные модули, режимы и другие обратно совместимые возможности.
 - `PATCH` — исправления ошибок, формулировок и небольшие улучшения интерфейса.
 
+[0.6.1]: https://github.com/EnroXD1/mes-navigator/releases/tag/v0.6.1
 [0.6.0]: https://github.com/EnroXD1/mes-navigator/releases/tag/v0.6.0
 [0.5.1]: https://github.com/EnroXD1/mes-navigator/releases/tag/v0.5.1
 [0.5.0]: https://github.com/EnroXD1/mes-navigator/releases/tag/v0.5.0
