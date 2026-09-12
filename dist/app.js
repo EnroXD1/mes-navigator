@@ -546,6 +546,29 @@ function openTopic(id) {
   if (!$("#topic-dialog").open) $("#topic-dialog").showModal();
 }
 
+function aiContextFor(target) {
+  const onPd96Track = target === "pd96" || (target === "next" && $("#pd96-view").classList.contains("active"));
+  if (onPd96Track) {
+    const module = target === "pd96" ? pd96ModuleById(activePd96ModuleId) : nextPd96Module();
+    if (module) {
+      const question = pd96Questions(module)[target === "pd96" ? activePd96QuestionIndex : 0];
+      return {
+        kind: "pd96",
+        title: `PD96 · ${module.title}`,
+        description: module.goal,
+        content: `Цель: ${module.goal}\nКлючевые понятия: ${module.concepts.join("; ")}\nВопрос самопроверки: ${question?.text || "нет"}`
+      };
+    }
+  }
+  const topic = target === "topic" ? topicById(activeTopicId) : nextTopic() || topics[0];
+  return {
+    kind: "topic",
+    title: `Тема ${topic.id} · ${topic.title}`,
+    description: topic.definition,
+    content: `Определение: ${topic.definition}\nКлючевые моменты: ${topic.details.points.join("; ")}\nПример: ${topic.details.example}\nНе путать: ${topic.details.distinction}\nВопрос самопроверки: Объясни, какую проблему решает «${topic.title}», и приведи пример для завода электродвигателей.`
+  };
+}
+
 function updateLessonButton(topic = topicById(activeTopicId)) {
   const button = $("#start-topic-lesson");
   const mastered = state.studied.includes(topic.id);
@@ -876,6 +899,11 @@ function renderAll() {
 }
 
 document.addEventListener("click", (event) => {
+  const aiButton = event.target.closest("[data-open-ai]");
+  if (aiButton) {
+    window.dispatchEvent(new CustomEvent("ceh-znaniy:open-ai", { detail: aiContextFor(aiButton.dataset.openAi) }));
+    return;
+  }
   const viewButton = event.target.closest("[data-view]");
   if (viewButton) showView(viewButton.dataset.view);
 
@@ -989,7 +1017,7 @@ function exportedProgress() {
   return {
     format: PROGRESS_TRANSFER_FORMAT,
     version: 1,
-    appVersion: "0.6.1",
+    appVersion: "0.7.0",
     exportedAt: new Date().toISOString(),
     state: structuredClone(state)
   };
@@ -1268,7 +1296,7 @@ if ("serviceWorker" in navigator) {
   });
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("./service-worker.js?v=0.6.1");
+      await navigator.serviceWorker.register("./service-worker.js?v=0.7.0");
       await navigator.serviceWorker.ready;
       updateOfflineStatus("Офлайн-кэш готов. Можно устанавливать приложение и отключать интернет.");
     } catch {

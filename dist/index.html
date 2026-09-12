@@ -9,9 +9,9 @@
     />
     <title>Цех знаний — тренажёр MES/MOM</title>
     <meta name="theme-color" content="#071019" />
-    <link rel="manifest" href="manifest.webmanifest?v=0.6.1" />
-    <link rel="icon" href="icon.svg?v=0.6.1" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=0.6.1" />
+    <link rel="manifest" href="manifest.webmanifest?v=0.7.0" />
+    <link rel="icon" href="icon.svg?v=0.7.0" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css?v=0.7.0" />
   </head>
   <body>
     <div class="app-shell">
@@ -20,7 +20,7 @@
           <span class="brand-mark" aria-hidden="true">ЦЗ</span>
           <span>
             <strong>Цех знаний</strong>
-            <small>MES / MOM navigator · v0.6.1</small>
+            <small>MES / MOM navigator · v0.7.0</small>
           </span>
         </button>
 
@@ -31,6 +31,7 @@
           <button class="nav-button" data-view="glossary">Словарь</button>
           <button class="nav-button" data-view="simulator">Симулятор</button>
           <button class="nav-button" data-view="quiz">Экзамен</button>
+          <button class="nav-button ai-nav-button" type="button" data-open-ai="next">ИИ-наставник</button>
         </nav>
 
         <div class="header-progress" aria-label="Общий прогресс">
@@ -51,6 +52,7 @@
                 <button class="button secondary" data-view="simulator">Открыть симулятор</button>
                 <button class="button secondary" id="install-app">Установка и офлайн</button>
                 <button class="button secondary" id="transfer-progress">Синхронизация</button>
+                <button class="button secondary" type="button" data-open-ai="next">Спросить ИИ</button>
               </div>
               <dl class="quick-stats">
                 <div><dt id="studied-count">0</dt><dd>тем изучено</dd></div>
@@ -273,6 +275,7 @@
         <label class="notes-field">Моя заметка<textarea id="dialog-note" rows="4" placeholder="Запиши объяснение своими словами…"></textarea></label>
       </div>
       <div class="dialog-actions">
+        <button class="button secondary" type="button" data-open-ai="topic">Спросить ИИ о теме</button>
         <button class="button secondary" id="save-note">Сохранить заметку</button>
         <button class="button primary" id="start-topic-lesson">Начать урок</button>
       </div>
@@ -318,7 +321,53 @@
       </div>
       <div class="dialog-actions pd96-dialog-actions">
         <span id="pd96-completion-hint">Для завершения: практика и 3 уверенных ответа</span>
+        <button class="button secondary" type="button" data-open-ai="pd96">Разобрать с ИИ</button>
         <button class="button primary" id="pd96-complete-module" disabled>Завершить модуль</button>
+      </div>
+    </dialog>
+
+    <dialog class="topic-dialog ai-dialog" id="ai-dialog" aria-labelledby="ai-dialog-title">
+      <div class="dialog-head">
+        <div><span class="topic-module-label">Помощь в обучении · онлайн</span><h2 id="ai-dialog-title">ИИ-наставник</h2></div>
+        <button class="dialog-close" id="ai-close" type="button" aria-label="Закрыть ИИ-наставника">×</button>
+      </div>
+      <div class="dialog-content ai-content">
+        <section class="ai-context-panel" aria-label="Контекст вопроса">
+          <span>Разбираем</span>
+          <strong id="ai-context-title">Текущую тему курса</strong>
+          <p id="ai-context-description"></p>
+        </section>
+        <section class="ai-connect-panel" id="ai-connect-panel">
+          <h3>Подключить бесплатную модель</h3>
+          <p>Войдите в OpenRouter (сервис доступен с 18 лет). Наставник использует только бесплатный маршрут <code>openrouter/free</code>; у него есть суточный лимит и доступность моделей может меняться.</p>
+          <div class="ai-connect-actions">
+            <button class="button primary" type="button" id="ai-connect">Войти через OpenRouter</button>
+            <details class="ai-existing-key">
+              <summary>У меня уже есть API-ключ</summary>
+              <label for="ai-key-input">Ключ OpenRouter</label>
+              <div><input id="ai-key-input" type="password" autocomplete="off" spellcheck="false" placeholder="sk-or-…" /><button class="button secondary" type="button" id="ai-use-key">Подключить</button></div>
+            </details>
+          </div>
+          <p class="ai-privacy-note">Ключ хранится только в этой вкладке браузера; в GitHub, Firebase, QR и резервную копию он не отправляется. Вопрос, контекст выбранной темы и недавняя переписка поступят в OpenRouter и поставщику модели только после нажатия «Отправить». Не вводите секреты предприятия или личные данные.</p>
+        </section>
+        <section class="ai-connected-panel" id="ai-connected-panel" hidden>
+          <span id="ai-connection-label">Подключено</span>
+          <button class="text-button" type="button" id="ai-disconnect">Отключить в этой вкладке</button>
+        </section>
+        <div class="ai-messages" id="ai-messages" role="log" aria-live="polite" aria-label="Переписка с ИИ-наставником">
+          <p class="ai-empty">Спросите, что именно непонятно. Наставник даст короткое объяснение и пример, а по вопросу самопроверки сначала подскажет ход мысли.</p>
+        </div>
+        <div class="ai-suggestions" aria-label="Примеры вопросов">
+          <button type="button" data-ai-prompt="Объясни эту тему простыми словами и приведи пример из производства электродвигателей.">Объясни проще</button>
+          <button type="button" data-ai-prompt="Чем это отличается от соседних систем и понятий? Приведи короткое сравнение.">С чем не путать?</button>
+          <button type="button" data-ai-prompt="Дай подсказку по вопросу самопроверки, но не раскрывай готовый ответ.">Подсказка к вопросу</button>
+        </div>
+        <form class="ai-form" id="ai-form">
+          <label for="ai-question">Ваш вопрос</label>
+          <textarea id="ai-question" rows="3" maxlength="2000" placeholder="Например: чем EBOM отличается от MBOM?" required></textarea>
+          <div class="ai-form-actions"><span id="ai-status" role="status" aria-live="polite"></span><button class="button primary" id="ai-send" type="submit">Отправить</button></div>
+        </form>
+        <p class="ai-disclaimer">После отправки ваш вопрос, контекст темы и недавнюю переписку получают OpenRouter и поставщик модели. ИИ может ошибаться: проверяйте важные ответы по материалу курса и официальным источникам. Без интернета наставник недоступен, но уроки работают офлайн.</p>
       </div>
     </dialog>
 
@@ -417,12 +466,13 @@
       </div>
     </dialog>
 
-    <script src="topic-details.js?v=0.6.1"></script>
-    <script src="topic-diagrams.js?v=0.6.1"></script>
-    <script src="abbreviations.js?v=0.6.1"></script>
-    <script src="pd96-course-data.js?v=0.6.1"></script>
-    <script src="qrcode.min.js?v=0.6.1"></script>
-    <script src="app.js?v=0.6.1"></script>
-    <script type="module" src="firebase-sync.js?v=0.6.1"></script>
+    <script src="topic-details.js?v=0.7.0"></script>
+    <script src="topic-diagrams.js?v=0.7.0"></script>
+    <script src="abbreviations.js?v=0.7.0"></script>
+    <script src="pd96-course-data.js?v=0.7.0"></script>
+    <script src="qrcode.min.js?v=0.7.0"></script>
+    <script src="app.js?v=0.7.0"></script>
+    <script src="ai-tutor.js?v=0.7.0"></script>
+    <script type="module" src="firebase-sync.js?v=0.7.0"></script>
   </body>
 </html>
