@@ -11,7 +11,8 @@
     "Расшифровывай аббревиатуры, показывай роль системы и один конкретный пример с производством электродвигателей.",
     "Если речь о вопросе самопроверки, сначала дай наводящую подсказку и попроси попытку ученика; полный разбор дай после попытки или прямой просьбы.",
     "Если контекста курса недостаточно, честно скажи об этом. Не выдумывай факты о PD96, нормах, стандартах и текущем состоянии права.",
-    "Для правовых и режимных решений рекомендуй проверять актуальную редакцию официальных источников и локальные правила предприятия."
+    "Для правовых и режимных решений рекомендуй проверять актуальную редакцию официальных источников и локальные правила предприятия.",
+    "Пиши итоговый ответ по-русски в Markdown. В таблицах ставь каждую строку на отдельную строку. Не выводи внутренние рассуждения или черновик."
   ].join(" ");
 
   const $ = (selector) => document.querySelector(selector);
@@ -19,6 +20,23 @@
   const messagesNode = $("#ai-messages");
   const questionNode = $("#ai-question");
   const sendButton = $("#ai-send");
+  const markdown = typeof window.markdownit === "function"
+    ? window.markdownit({ html: false, breaks: true, linkify: false })
+    : null;
+  if (markdown) {
+    markdown.disable("image");
+    const validateLink = markdown.validateLink.bind(markdown);
+    markdown.validateLink = (href) => {
+      if (!validateLink(href)) return false;
+      try { return ["https:", "http:"].includes(new URL(href, location.href).protocol); } catch { return false; }
+    };
+    const defaultLinkOpen = markdown.renderer.rules.link_open || ((tokens, index, options, env, self) => self.renderToken(tokens, index, options));
+    markdown.renderer.rules.link_open = (tokens, index, options, env, self) => {
+      tokens[index].attrSet("target", "_blank");
+      tokens[index].attrSet("rel", "noopener noreferrer");
+      return defaultLinkOpen(tokens, index, options, env, self);
+    };
+  }
   let apiKey = readSession(KEY_STORAGE) || "";
   let currentContext = null;
   let history = [];
@@ -57,14 +75,36 @@
     messagesNode.append(empty);
   }
 
+  function normalizeAssistantMarkdown(text) {
+    return text.replace(/\r\n?/g, "\n").trim().split("\n").map((sourceLine) => {
+      if (!/\|\s*:?-{3,}:?\s*\|/.test(sourceLine) || !/\|\s+\|/.test(sourceLine)) return sourceLine;
+      let line = sourceLine;
+      const firstPipe = line.indexOf("|");
+      if (firstPipe > 0 && line.slice(0, firstPipe).trim()) {
+        line = `${line.slice(0, firstPipe).trimEnd()}\n\n${line.slice(firstPipe)}`;
+      }
+      return line.replace(/\|\s+(?=\|)/g, "|\n").replace(/\|\s{2,}(?=\*\*|#{1,6}\s)/g, "|\n\n");
+    }).join("\n");
+  }
+
   function appendMessage(role, text) {
     messagesNode.querySelector(".ai-empty")?.remove();
     const item = document.createElement("div");
     item.className = `ai-message ${role}`;
     const label = document.createElement("strong");
+    label.className = "ai-message-label";
     label.textContent = role === "user" ? "Вы" : "Наставник";
-    const body = document.createElement("p");
-    body.textContent = text;
+    const body = document.createElement(role === "assistant" ? "div" : "p");
+    if (role === "assistant" && markdown) {
+      body.className = "ai-markdown";
+      body.innerHTML = markdown.render(normalizeAssistantMarkdown(text));
+      if (body.querySelector("table")) {
+        body.tabIndex = 0;
+        body.setAttribute("aria-label", "Ответ наставника. Таблицу можно прокручивать по горизонтали.");
+      }
+    } else {
+      body.textContent = text;
+    }
     item.append(label, body);
     messagesNode.append(item);
     messagesNode.scrollTop = messagesNode.scrollHeight;
@@ -161,9 +201,16 @@
 
   function answerText(data) {
     const content = data?.choices?.[0]?.message?.content;
-    if (typeof content === "string") return content.trim();
-    if (Array.isArray(content)) return content.filter((part) => part?.type === "text").map((part) => part.text).join("\n").trim();
-    return "";
+    const raw = typeof content === "string"
+      ? content
+      : Array.isArray(content) ? content.filter((part) => part?.type === "text").map((part) => part.text).join("\n") : "";
+    let answer = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/<analysis>[\s\S]*?<\/analysis>/gi, "")
+      .replace(/<(?:think|analysis)>[\s\S]*$/i, "").trim();
+    if (/^(?:here(?:'s| is) a thinking process|thinking process|процесс размышления)\s*:/i.test(answer)) {
+      const finalMarker = answer.search(/(?:^|\n)\s*(?:final answer|итоговый ответ|ответ)\s*:/im);
+      answer = finalMarker >= 0 ? answer.slice(finalMarker).replace(/^\s*(?:final answer|итоговый ответ|ответ)\s*:/i, "").trim() : "";
+    }
+    return answer;
   }
 
   async function askTutor() {
@@ -191,7 +238,8 @@
         body: JSON.stringify({
           model: "openrouter/free",
           messages: [{ role: "system", content: SYSTEM_PROMPT }, ...requestHistory, { role: "user", content: userContent }],
-          max_tokens: 500,
+          max_tokens: 1100,
+          reasoning: { exclude: true },
           stream: false
         }),
         signal: controller.signal
@@ -199,13 +247,16 @@
       if (!response.ok) throw new Error(httpError(response.status));
       const data = await response.json();
       const answer = answerText(data);
-      if (!answer) throw new Error("Модель не вернула текст. Попробуйте переформулировать вопрос.");
+      if (!answer) throw new Error("Модель прислала черновик вместо ответа. Повторите вопрос — бесплатный маршрут выберет другую модель.");
       appendMessage("user", question);
       appendMessage("assistant", answer);
       history.push({ role: "user", content: question }, { role: "assistant", content: answer.slice(0, 3000) });
       history = history.slice(-8);
       questionNode.value = "";
-      setStatus(data.model ? `Ответ получен · ${data.model}` : "Ответ получен.");
+      const modelLabel = data.model ? ` · ${data.model}` : "";
+      setStatus(data.choices?.[0]?.finish_reason === "length"
+        ? `Ответ мог обрезаться по лимиту. Попросите продолжить${modelLabel}.`
+        : `Ответ получен${modelLabel}.`);
     } catch (error) {
       if (error.name === "AbortError") setStatus("Запрос прерван или превысил 45 секунд. Попробуйте снова.", true);
       else if (error instanceof TypeError) setStatus("Нет связи с OpenRouter. Проверьте интернет и доступность сервиса.", true);

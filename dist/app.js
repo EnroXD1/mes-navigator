@@ -1017,7 +1017,7 @@ function exportedProgress() {
   return {
     format: PROGRESS_TRANSFER_FORMAT,
     version: 1,
-    appVersion: "0.7.0",
+    appVersion: "0.7.1",
     exportedAt: new Date().toISOString(),
     state: structuredClone(state)
   };
@@ -1296,7 +1296,7 @@ if ("serviceWorker" in navigator) {
   });
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("./service-worker.js?v=0.7.0");
+      await navigator.serviceWorker.register("./service-worker.js?v=0.7.1");
       await navigator.serviceWorker.ready;
       updateOfflineStatus("Офлайн-кэш готов. Можно устанавливать приложение и отключать интернет.");
     } catch {

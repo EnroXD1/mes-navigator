@@ -376,13 +376,31 @@ h3 { font-size: 1rem; }
 .ai-connect-panel .ai-privacy-note { margin: 16px 0 0 !important; color: var(--muted); font-size: 0.84rem; }
 .ai-connected-panel { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px 14px; border: 1px solid rgba(200,242,107,0.28); border-radius: 10px; background: rgba(200,242,107,0.05); }
 .ai-connected-panel span { color: var(--lime); font-weight: 700; }
-.ai-messages { display: grid; align-content: start; gap: 12px; min-height: 130px; max-height: 40vh; overflow-y: auto; padding: 16px; border: 1px solid var(--line-soft); border-radius: 12px; background: #08131d; }
+.ai-messages { display: grid; align-content: start; gap: 12px; min-width: 0; min-height: 130px; max-height: 40vh; overflow-y: auto; padding: 16px; border: 1px solid var(--line-soft); border-radius: 12px; background: #08131d; }
 .ai-empty { margin: auto 0 !important; color: var(--muted) !important; }
 .ai-message { max-width: 94%; padding: 12px 15px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
 .ai-message.user { justify-self: end; border-color: rgba(101,219,229,0.26); background: rgba(101,219,229,0.08); }
-.ai-message strong { display: block; margin-bottom: 4px; color: var(--cyan); font-size: 0.82rem; }
-.ai-message.assistant strong { color: var(--lime); }
-.ai-message p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ai-message.assistant { width: 100%; min-width: 0; max-width: 100%; }
+.ai-message > .ai-message-label { display: block; margin-bottom: 7px; color: var(--cyan); font-size: 0.82rem; }
+.ai-message.assistant > .ai-message-label { color: var(--lime); }
+.ai-message.user > p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ai-markdown { min-width: 0; max-width: 100%; overflow-x: auto; overflow-wrap: anywhere; line-height: 1.55; }
+.ai-markdown > :first-child { margin-top: 0; }
+.ai-markdown > :last-child { margin-bottom: 0; }
+.ai-markdown p { margin: 0 0 0.8em; }
+.ai-markdown h1, .ai-markdown h2, .ai-markdown h3, .ai-markdown h4 { margin: 1em 0 0.5em; font-size: 1rem; line-height: 1.35; letter-spacing: 0; }
+.ai-markdown ul, .ai-markdown ol { margin: 0.6em 0 0.9em; padding-left: 1.5em; }
+.ai-markdown li + li { margin-top: 0.3em; }
+.ai-markdown strong { color: var(--text); font-weight: 800; }
+.ai-markdown a { color: var(--cyan); text-decoration: underline; text-underline-offset: 2px; }
+.ai-markdown blockquote { margin: 0.8em 0; padding: 0.25em 0 0.25em 1em; border-left: 3px solid var(--cyan); color: var(--muted); }
+.ai-markdown :not(pre) > code { padding: 0.12em 0.35em; border-radius: 5px; background: #08131d; color: var(--lime); }
+.ai-markdown pre { max-width: 100%; overflow-x: auto; margin: 0.8em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #08131d; }
+.ai-markdown pre code { white-space: pre; }
+.ai-markdown table { width: max-content; min-width: 100%; margin: 0.8em 0; border-collapse: collapse; font-size: 0.9rem; }
+.ai-markdown th, .ai-markdown td { max-width: 260px; padding: 9px 11px; border: 1px solid var(--line); vertical-align: top; text-align: left; overflow-wrap: anywhere; }
+.ai-markdown th { background: #1a3140; color: var(--text); }
+.ai-markdown tbody tr:nth-child(even) { background: rgba(255,255,255,0.035); }
 .ai-suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
 .ai-suggestions button { padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--text); cursor: pointer; }
 .ai-suggestions button:hover { border-color: var(--cyan); }

@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const { webcrypto } = require("node:crypto");
+const markdownit = require("../dist/markdown-it.min.js");
 
 const source = fs.readFileSync(path.join(__dirname, "../dist/ai-tutor.js"), "utf8");
 
@@ -21,7 +22,11 @@ class Element {
   focus() {}
   append(...children) { children.forEach((child) => { child.parent = this; this.children.push(child); }); }
   replaceChildren() { this.children = []; }
-  querySelector(selector) { return this.children.find((child) => `.${child.className}` === selector) || null; }
+  querySelector(selector) {
+    if (selector === "table") return this.innerHTML?.includes("<table>") ? new Element() : null;
+    return this.children.find((child) => `.${child.className}` === selector) || null;
+  }
+  setAttribute(name, value) { this[name] = value; }
   remove() { if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this); }
 }
 
@@ -40,6 +45,7 @@ function harness(href, initialSession = {}, fetchResult = () => ({ choices: [{ m
     },
     window: {
       addEventListener: (name, callback) => { listeners[name] = callback; },
+      markdownit,
       crypto: webcrypto,
       history: { replaceState: (_state, _title, url) => { cleanedUrl = url; } }
     },
@@ -84,6 +90,34 @@ async function run() {
   assert.match(payload.messages.at(-1).content, /Что такое MES/);
   assert.equal(app.nodes.get("ai-messages").children.length, 2);
   assert.equal(app.storage.has("ceh-znaniy-state"), false);
+
+  const flattenedTable = "**BOM** — рецепт изделия.  **Коротко:**  | Понятие | Что показывает | Где используется | |---|---|---| | **EBOM** | Задумка конструктора | PLM | | **MBOM** | Производственная сборка | MES |  **Пример:** подшипник ротора.";
+  const rich = harness("https://enroxd1.github.io/mes-navigator/", {}, () => ({
+    choices: [{ message: { content: `${flattenedTable}\n\n<script>alert(1)</script> ![x](https://example.com/x.png) [опасная ссылка](javascript:alert(1))` } }]
+  }));
+  rich.listeners["ceh-znaniy:open-ai"]({ detail: { title: "BOM", content: "BOM" } });
+  rich.nodes.get("ai-key-input").value = "sk-or-test";
+  rich.nodes.get("ai-use-key").listeners.click();
+  rich.nodes.get("ai-question").value = "Сравни EBOM и MBOM";
+  rich.nodes.get("ai-form").listeners.submit({ preventDefault() {} });
+  await tick();
+  const rendered = rich.nodes.get("ai-messages").children[1].children[1].innerHTML;
+  assert.match(rendered, /<table>/);
+  assert.match(rendered, /<strong>BOM<\/strong>/);
+  assert.match(rendered, /<td>Задумка конструктора<\/td>/);
+  assert.doesNotMatch(rendered, /<script|<img|href="javascript:/);
+
+  const draft = harness("https://enroxd1.github.io/mes-navigator/", {}, () => ({
+    choices: [{ message: { content: "Here's a thinking process:\n1. Analyze user input\n2. Choose response" } }]
+  }));
+  draft.listeners["ceh-znaniy:open-ai"]({ detail: { title: "BOM", content: "BOM" } });
+  draft.nodes.get("ai-key-input").value = "sk-or-test";
+  draft.nodes.get("ai-use-key").listeners.click();
+  draft.nodes.get("ai-question").value = "Что такое BOM?";
+  draft.nodes.get("ai-form").listeners.submit({ preventDefault() {} });
+  await tick();
+  assert.equal(draft.nodes.get("ai-messages").children.length, 1);
+  assert.match(draft.nodes.get("ai-status").textContent, /черновик/);
 
   const callback = harness("https://enroxd1.github.io/mes-navigator/?code=temporary", {
     "ceh-znaniy-openrouter-auth-flow": JSON.stringify({ verifier: "verifier", context: { title: "PD96", content: "Планирование" }, createdAt: Date.now() })
